@@ -34,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.gallery.app.ui.design.DialogButtonStyle
 import com.gallery.app.ui.design.ThemedButton
 import com.gallery.app.ui.design.ThemedCard
 import com.gallery.app.ui.theme.LocalAppTheme
@@ -155,8 +154,7 @@ fun PermissionScreen(
                                 ThemedButton(
                                     text = strings.allFilesGrant,
                                     onClick = onRequestAllFilesAccess,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    style = DialogButtonStyle.Default
+                                    modifier = Modifier.fillMaxWidth()
                                 )
                             }
                         }

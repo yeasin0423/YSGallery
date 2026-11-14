@@ -84,6 +84,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -839,14 +840,14 @@ private fun EditorTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .height(60.dp)
+            .height(64.dp)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         val closeInteraction = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(46.dp)
                 .pressScale(closeInteraction, 0.9f)
                 .clip(CircleShape)
                 .background(palette.surface)
@@ -862,36 +863,39 @@ private fun EditorTopBar(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = strings.close,
                 tint = if (closeEnabled) palette.onBackground else palette.textMuted,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(24.dp)
             )
         }
         Text(
             text = strings.edit,
             color = palette.onBackground,
-            fontSize = 17.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 10.dp, end = 2.dp)
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp, end = 6.dp)
         )
         TopBarIconButton(
             icon = Icons.AutoMirrored.Rounded.Undo,
             contentDescription = strings.undo,
             enabled = undoEnabled,
-            iconSize = 21.dp,
+            iconSize = 24.dp,
             onClick = onUndo
         )
         TopBarIconButton(
             icon = Icons.AutoMirrored.Rounded.Redo,
             contentDescription = strings.redo,
             enabled = redoEnabled,
-            iconSize = 21.dp,
+            iconSize = 24.dp,
             onClick = onRedo
         )
-        Spacer(modifier = Modifier.weight(1f))
         TopBarIconButton(
             icon = Icons.Rounded.Restore,
             contentDescription = strings.reset,
             enabled = resetEnabled,
-            iconSize = 20.dp,
+            iconSize = 23.dp,
             onClick = onReset
         )
         Spacer(modifier = Modifier.width(4.dp))
@@ -918,7 +922,7 @@ private fun TopBarIconButton(
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .size(36.dp)
+            .size(40.dp)
             .pressScale(interaction, 0.9f)
             .clip(CircleShape)
             .clickable(
@@ -972,12 +976,12 @@ private fun SavePill(
                     enabled = enabled,
                     onClick = onSaveCopy
                 )
-                .padding(start = 14.dp, end = if (canOverwrite) 10.dp else 14.dp, top = 10.dp, bottom = 10.dp)
+                .padding(start = 18.dp, end = if (canOverwrite) 12.dp else 18.dp, top = 12.dp, bottom = 12.dp)
         ) {
             Text(
                 text = strings.save,
                 color = content,
-                fontSize = 15.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1
             )
@@ -986,7 +990,7 @@ private fun SavePill(
             Box(
                 modifier = Modifier
                     .width(1.dp)
-                    .height(20.dp)
+                    .height(22.dp)
                     .background(content.copy(alpha = 0.3f))
             )
             Box(
@@ -1000,13 +1004,13 @@ private fun SavePill(
                         onClick = onSaveOptions
                     )
                     .onGloballyPositioned { onOptionsBounds(it.boundsInRoot()) }
-                    .padding(horizontal = 7.dp, vertical = 10.dp)
+                    .padding(horizontal = 9.dp, vertical = 12.dp)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.KeyboardArrowDown,
                     contentDescription = strings.saveOptions,
                     tint = content,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
         }
