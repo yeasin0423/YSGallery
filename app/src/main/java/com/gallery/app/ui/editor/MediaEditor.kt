@@ -12,6 +12,7 @@ import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -74,7 +75,8 @@ data class NormalizedRect(val left: Float, val top: Float, val right: Float, val
 /**
  * An edit: mirror first ([flipHorizontal]/[flipVertical] on the source frame), then rotate clockwise by
  * [rotation] degrees, then crop to [crop] (expressed in the resulting frame), then apply [colorMatrix]
- * (the combined adjustments and filter), then paint [drawStrokes] and [textOverlays] on top.
+ * (the combined adjustments and filter), then soften [blurStrokes], paint [drawStrokes] and finally
+ * [textOverlays] on top.
  */
 data class EditSpec(
     val rotation: Int,
@@ -83,6 +85,7 @@ data class EditSpec(
     val crop: NormalizedRect,
     val colorMatrix: FloatArray? = null,
     val drawStrokes: List<DrawStroke> = emptyList(),
+    val blurStrokes: List<BlurStroke> = emptyList(),
     val textOverlays: List<TextOverlay> = emptyList()
 )
 
@@ -262,11 +265,16 @@ object MediaEditor {
         val cropped = if (crop.isFull) transformed else Bitmap.createBitmap(transformed, x, y, width, height)
         // Adjustments and the selected filter are baked in after cropping so the export matches the preview.
         val colored = spec.colorMatrix?.let { applyColorMatrix(cropped, it) } ?: cropped
-        // Ink is added last: in the preview it is drawn over the filtered image too.
-        val inked = if (spec.drawStrokes.isEmpty()) {
+        // Softened patches sit on the adjusted image, then ink, then labels: that is the preview order.
+        val softened = if (spec.blurStrokes.isEmpty()) {
             colored
         } else {
-            applyDrawStrokes(colored, spec.drawStrokes, crop, transformed.width, transformed.height)
+            applyBlurStrokes(colored, spec.blurStrokes, crop, transformed.width, transformed.height)
+        }
+        val inked = if (spec.drawStrokes.isEmpty()) {
+            softened
+        } else {
+            applyDrawStrokes(softened, spec.drawStrokes, crop, transformed.width, transformed.height)
         }
         // Labels sit above the ink, in the same order the preview draws them.
         val labelBitmaps = mutableListOf<Bitmap>()
@@ -291,7 +299,8 @@ object MediaEditor {
             throw e
         } finally {
             labelBitmaps.forEach { it.recycle() }
-            if (inked !== colored) inked.recycle()
+            if (inked !== softened) inked.recycle()
+            if (softened !== colored) softened.recycle()
             if (colored !== cropped) colored.recycle()
             if (cropped !== transformed) cropped.recycle()
             if (transformed !== decoded) transformed.recycle()
@@ -359,6 +368,45 @@ object MediaEditor {
                 canvas.drawPath(path, line)
             }
         }
+        return output
+    }
+
+    /**
+     * Replaces the bands under [strokes] with a softened copy of [source]. The mask uses the same
+     * round-capped outline as the preview, and the blurred copy is only built once per export.
+     */
+    private fun applyBlurStrokes(
+        source: Bitmap,
+        strokes: List<BlurStroke>,
+        crop: NormalizedRect,
+        frameWidth: Int,
+        frameHeight: Int
+    ): Bitmap {
+        val blurred = blurredBitmap(source)
+        val scaleX = source.width / crop.width
+        val scaleY = source.height / crop.height
+        val mask = blurMaskPath(
+            strokes = strokes,
+            originX = -crop.left * scaleX,
+            originY = -crop.top * scaleY,
+            scaleX = scaleX,
+            scaleY = scaleY,
+            strokeScale = min(frameWidth, frameHeight).toFloat()
+        )
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        val save = canvas.save()
+        canvas.clipPath(mask)
+        // The blurred copy is tiny; stretch it over the output with filtering, as the preview does.
+        canvas.drawBitmap(
+            blurred,
+            null,
+            RectF(0f, 0f, output.width.toFloat(), output.height.toFloat()),
+            Paint(Paint.FILTER_BITMAP_FLAG)
+        )
+        canvas.restoreToCount(save)
+        blurred.recycle()
         return output
     }
 

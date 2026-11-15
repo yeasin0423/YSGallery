@@ -3,7 +3,9 @@ package com.gallery.app.ui.editor
 import android.app.Activity
 import android.app.PendingIntent
 import android.graphics.Bitmap
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -91,6 +93,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -155,6 +158,7 @@ private data class EditorSnapshot(
     val adjustments: EditorAdjustments,
     val filter: EditorFilter,
     val strokes: List<DrawStroke>,
+    val blurStrokes: List<BlurStroke>,
     val texts: List<TextOverlay>
 )
 
@@ -228,9 +232,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var activeStroke by remember { mutableStateOf<DrawStroke?>(null) }
     // Live points of the stroke under the finger; a snapshot list keeps long strokes cheap to extend.
     val activePoints = remember { mutableStateListOf<Offset>() }
-    var eraser by remember { mutableStateOf(false) }
-    // Where the eraser finger is, so the white cursor circle can show the area it will clear.
-    var eraserCursor by remember { mutableStateOf<Offset?>(null) }
+    var drawMode by remember { mutableStateOf(DrawMode.Brush) }
+    var blurStrokes by remember { mutableStateOf<List<BlurStroke>>(emptyList()) }
+    var activeBlur by remember { mutableStateOf<BlurStroke?>(null) }
+    val activeBlurPoints = remember { mutableStateListOf<Offset>() }
+    // Where the eraser or blur brush is, so a ring can show the area it covers.
+    var toolCursor by remember { mutableStateOf<Offset?>(null) }
     var textOverlays by remember { mutableStateOf<List<TextOverlay>>(emptyList()) }
     var selectedTextId by remember { mutableStateOf<Long?>(null) }
     // Set when a box is created blank; the first typed character turns it into one undo step.
@@ -267,6 +274,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var cropGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var strokeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var eraseGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var blurGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGesture by remember { mutableStateOf<TextGesture?>(null) }
 
@@ -291,9 +299,22 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     val previewColorFilter = remember(colorMatrix) {
         ColorFilter.colorMatrix(ColorMatrix(values = colorMatrix))
     }
+    // The blur tool shows a softened copy of the frame under its mask. It is rebuilt only when the
+    // frame changes or the tool becomes active, never on every stroke; it stays tiny, so letting the
+    // collector reclaim an old copy is safer than recycling one a draw pass may still hold.
+    val blurActive = blurStrokes.isNotEmpty() || (tab == EditorTab.Draw && drawMode == DrawMode.Blur)
+    val blurredPreview = remember(preview, blurActive) {
+        if (!blurActive) null else preview?.let { blurredBitmap(it.asAndroidBitmap()) }
+    }
+    // The same colour matrix the photo is drawn with, so a blurred patch matches its surroundings.
+    val blurPaint = remember(colorMatrix) {
+        Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply {
+            colorFilter = ColorMatrixColorFilter(colorMatrix)
+        }
+    }
     val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
             !adjustments.isNeutral || filter.id != EditorFilterNone.id || strokes.isNotEmpty() ||
-            textOverlays.any { it.text.isNotBlank() }
+            blurStrokes.isNotEmpty() || textOverlays.any { it.text.isNotBlank() }
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
     val canUndo = undoStack.isNotEmpty()
     val canRedo = redoStack.isNotEmpty()
@@ -307,6 +328,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = adjustments,
         filter = filter,
         strokes = strokes,
+        blurStrokes = blurStrokes,
         texts = textOverlays
     )
 
@@ -325,6 +347,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = state.adjustments
         filter = state.filter
         strokes = state.strokes
+        blurStrokes = state.blurStrokes
         // Empty boxes only exist while being typed into; history keeps them out of the way.
         textOverlays = state.texts.filter { it.text.isNotBlank() }
         if (textOverlays.none { it.id == selectedTextId }) selectedTextId = null
@@ -335,10 +358,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         pendingTextCreate = null
         activeStroke = null
         activePoints.clear()
+        activeBlur = null
+        activeBlurPoints.clear()
         adjustGestureStart = null
         cropGestureStart = null
         strokeGestureStart = null
         eraseGestureStart = null
+        blurGestureStart = null
         textGestureStart = null
         textGesture = null
         openPanel = EditorPanel.None
@@ -413,6 +439,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             fitCrop(crop, locked)
         }
         strokes = strokes.map { if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise() }
+        blurStrokes = blurStrokes.map {
+            if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise()
+        }
         textOverlays = textOverlays.map {
             if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise()
         }
@@ -429,6 +458,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (rotation % 180 == 0) flipHorizontal = !flipHorizontal else flipVertical = !flipVertical
         crop = crop.flipHorizontal()
         strokes = strokes.map { it.flipHorizontal() }
+        blurStrokes = blurStrokes.map { it.flipHorizontal() }
         textOverlays = textOverlays.map { it.flipHorizontal() }
         scope.launch {
             flipXAnimation.snapTo(-1f)
@@ -441,6 +471,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (rotation % 180 == 0) flipVertical = !flipVertical else flipHorizontal = !flipHorizontal
         crop = crop.flipVertical()
         strokes = strokes.map { it.flipVertical() }
+        blurStrokes = blurStrokes.map { it.flipVertical() }
         textOverlays = textOverlays.map { it.flipVertical() }
         scope.launch {
             flipYAnimation.snapTo(-1f)
@@ -460,10 +491,14 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         filter = EditorFilterNone
         strokes = emptyList()
         activeStroke = null
+        blurStrokes = emptyList()
+        activeBlur = null
+        activeBlurPoints.clear()
+        toolCursor = null
         textOverlays = emptyList()
         selectedTextId = null
         pendingTextCreate = null
-        eraser = false
+        drawMode = DrawMode.Brush
         openPanel = EditorPanel.None
     }
 
@@ -541,6 +576,36 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         eraseGestureStart = null
     }
 
+    fun beginBlur(position: Offset, rect: Rect) {
+        if (!rect.contains(position)) return
+        blurGestureStart = snapshot()
+        activeBlurPoints.clear()
+        activeBlurPoints.add(normalizedPoint(position, rect))
+        activeBlur = BlurStroke(activeBlurPoints, drawWidth)
+    }
+
+    fun extendBlur(position: Offset, rect: Rect) {
+        if (activeBlur == null) return
+        val point = normalizedPoint(position, rect)
+        val last = activeBlurPoints.lastOrNull() ?: return
+        if (abs((point.x - last.x) * rect.width) < 1f &&
+            abs((point.y - last.y) * rect.height) < 1f
+        ) {
+            return
+        }
+        activeBlurPoints.add(point)
+    }
+
+    fun finishBlur() {
+        val finished = activeBlur ?: return
+        val before = blurGestureStart
+        activeBlur = null
+        blurGestureStart = null
+        blurStrokes = blurStrokes + finished.copy(points = activeBlurPoints.toList())
+        activeBlurPoints.clear()
+        if (before != null) pushHistory(before)
+    }
+
     /**
      * Measures a label's selection box in view pixels with the same paint the preview and export use,
      * padded so the outline never sits on the glyphs themselves.
@@ -571,11 +636,15 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         textOverlays = textOverlays.map { if (it.id == id) update(it) else it }
     }
 
-    /** The topmost label whose box or handle sits under [position]. */
+    /**
+     * The topmost label whose box or visible handle sits under [position]. The remove cross only
+     * exists on the selected box, so it is ignored here and handled separately.
+     */
     fun textHitAt(position: Offset, rect: Rect): TextOverlay? {
         val radius = with(density) { 22.dp.toPx() }
         return textOverlays.lastOrNull {
-            textBoxOf(it, rect).hitTest(position, radius) != TextHandle.None
+            val handle = textBoxOf(it, rect).hitTest(position, radius)
+            handle != TextHandle.None && handle != TextHandle.Delete
         }
     }
 
@@ -625,15 +694,19 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
      * it first so the panel edits the label the finger touched.
      */
     fun beginTextGesture(position: Offset, rect: Rect): Boolean {
+        val radius = with(density) { 22.dp.toPx() }
+        // Only the selected box paints the cross, so only its cross can fire.
+        selectedText()?.let { selected ->
+            if (textBoxOf(selected, rect).hitTest(position, radius) == TextHandle.Delete) {
+                deleteText(selected)
+                return true
+            }
+        }
         val overlay = textHitAt(position, rect) ?: return false
         selectText(overlay)
         val box = textBoxOf(overlay, rect)
-        val handle = box.hitTest(position, with(density) { 22.dp.toPx() })
+        val handle = box.hitTest(position, radius)
         if (handle == TextHandle.None) return false
-        if (handle == TextHandle.Delete) {
-            deleteText(overlay)
-            return true
-        }
         // Any change other than typing makes the pre-creation snapshot stale.
         pendingTextCreate = null
         val fromCenter = position - box.center
@@ -753,7 +826,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (saving || !changed) return
         saving = true
         progress = 0f
-        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlays)
+        val spec = EditSpec(
+            rotation = rotation,
+            flipHorizontal = flipHorizontal,
+            flipVertical = flipVertical,
+            crop = crop,
+            colorMatrix = colorMatrix,
+            drawStrokes = strokes,
+            blurStrokes = blurStrokes,
+            textOverlays = textOverlays
+        )
         scope.launch {
             if (item.isVideo) {
                 runCatching { MediaEditor.saveVideo(context, item, spec) { progress = it } }
@@ -784,7 +866,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (saving || !changed || !canOverwrite) return
         saving = true
         progress = 0f
-        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlays)
+        val spec = EditSpec(
+            rotation = rotation,
+            flipHorizontal = flipHorizontal,
+            flipVertical = flipVertical,
+            crop = crop,
+            colorMatrix = colorMatrix,
+            drawStrokes = strokes,
+            blurStrokes = blurStrokes,
+            textOverlays = textOverlays
+        )
         scope.launch {
             runCatching { MediaEditor.saveImage(context, item, spec, overwrite = true) }
                 .onSuccess { result ->
@@ -815,6 +906,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 if (tab == EditorTab.Text) {
                     discardBlankText()
                     selectedTextId = null
+                    textEditorFocused = false
                 }
                 tab = EditorTab.Crop
             }
@@ -875,6 +967,17 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     Offset((areaWidth - drawWidth) / 2f, (areaHeight - drawHeight) / 2f),
                     Size(drawWidth, drawHeight)
                 )
+                // The finished bands' mask only changes when a stroke lands, not on every frame.
+                val blurMask = remember(blurStrokes, imageRect) {
+                    blurMaskPath(
+                        strokes = blurStrokes,
+                        originX = imageRect.left,
+                        originY = imageRect.top,
+                        scaleX = imageRect.width,
+                        scaleY = imageRect.height,
+                        strokeScale = min(imageRect.width, imageRect.height)
+                    )
+                }
                 var activeHandle by remember { mutableStateOf(CropHandle.NONE) }
 
                 Canvas(
@@ -885,32 +988,48 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             scaleX = flipXAnimation.value
                             scaleY = flipYAnimation.value
                         }
-                        .pointerInput(imageRect, cropAspect, tab) {
+                        .pointerInput(imageRect, cropAspect, tab, drawMode) {
                             if (tab == EditorTab.Draw) {
                                 val eraseRadius = 18.dp.toPx()
-                                // A raw down/drag loop keeps the eraser cursor under the finger from the
+                                // A raw down/drag loop keeps the tool cursor under the finger from the
                                 // first touch and paints a dot for a tap, which the slop-based detector
                                 // would swallow.
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
-                                    if (eraser) {
-                                        eraserCursor = down.position
-                                        beginErase()
-                                        eraseAt(down.position, imageRect, eraseRadius)
-                                        drag(down.id) { change ->
-                                            change.consume()
-                                            eraserCursor = change.position
-                                            eraseAt(change.position, imageRect, eraseRadius)
+                                    when (drawMode) {
+                                        DrawMode.Eraser -> {
+                                            toolCursor = down.position
+                                            beginErase()
+                                            eraseAt(down.position, imageRect, eraseRadius)
+                                            drag(down.id) { change ->
+                                                change.consume()
+                                                toolCursor = change.position
+                                                eraseAt(change.position, imageRect, eraseRadius)
+                                            }
+                                            toolCursor = null
+                                            finishErase()
                                         }
-                                        eraserCursor = null
-                                        finishErase()
-                                    } else {
-                                        beginStroke(down.position, imageRect)
-                                        drag(down.id) { change ->
-                                            change.consume()
-                                            extendStroke(change.position, imageRect)
+
+                                        DrawMode.Blur -> {
+                                            toolCursor = down.position
+                                            beginBlur(down.position, imageRect)
+                                            drag(down.id) { change ->
+                                                change.consume()
+                                                toolCursor = change.position
+                                                extendBlur(change.position, imageRect)
+                                            }
+                                            toolCursor = null
+                                            finishBlur()
                                         }
-                                        finishStroke()
+
+                                        DrawMode.Brush -> {
+                                            beginStroke(down.position, imageRect)
+                                            drag(down.id) { change ->
+                                                change.consume()
+                                                extendStroke(change.position, imageRect)
+                                            }
+                                            finishStroke()
+                                        }
                                     }
                                 }
                                 return@pointerInput
@@ -999,6 +1118,44 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     val inkBounds = cropRectIn(imageRect, crop)
                     // Ink is clipped to the crop so the preview hides what the export would cut off.
                     clipRect(inkBounds.left, inkBounds.top, inkBounds.right, inkBounds.bottom) {
+                        // Softened patches sit under the ink and text, matching the export order.
+                        val blurred = blurredPreview
+                        if (blurred != null) {
+                            val active = activeBlur
+                            val activeMask = if (active == null) {
+                                null
+                            } else {
+                                blurMaskPath(
+                                    strokes = listOf(active),
+                                    originX = imageRect.left,
+                                    originY = imageRect.top,
+                                    scaleX = imageRect.width,
+                                    scaleY = imageRect.height,
+                                    strokeScale = frameMin
+                                )
+                            }
+                            drawIntoCanvas { canvas ->
+                                val native = canvas.nativeCanvas
+                                val destination = RectF(
+                                    imageRect.left,
+                                    imageRect.top,
+                                    imageRect.right,
+                                    imageRect.bottom
+                                )
+                                if (blurStrokes.isNotEmpty()) {
+                                    val save = native.save()
+                                    native.clipPath(blurMask)
+                                    native.drawBitmap(blurred, null, destination, blurPaint)
+                                    native.restoreToCount(save)
+                                }
+                                if (activeMask != null) {
+                                    val save = native.save()
+                                    native.clipPath(activeMask)
+                                    native.drawBitmap(blurred, null, destination, blurPaint)
+                                    native.restoreToCount(save)
+                                }
+                            }
+                        }
                         strokes.forEach { stroke ->
                             drawEditorStroke(
                                 stroke = stroke,
@@ -1186,11 +1343,15 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             drawLine(handleColor, corner, Offset(corner.x, corner.y + handleLength * dy), handleStroke)
                         }
                     }
-                    // The eraser cursor: a white ring around the area a drag clears, with a faint
-                    // shadow ring so it stays visible on white photos.
-                    if (tab == EditorTab.Draw && eraser) {
-                        eraserCursor?.let { point ->
-                            val radius = 18.dp.toPx()
+                    // The eraser and blur brush cursor: a white ring around the area a drag touches,
+                    // with a faint shadow ring so it stays visible on white photos.
+                    if (tab == EditorTab.Draw && drawMode != DrawMode.Brush) {
+                        toolCursor?.let { point ->
+                            val radius = if (drawMode == DrawMode.Blur) {
+                                (drawWidth * frameMin / 2f).coerceAtLeast(10.dp.toPx())
+                            } else {
+                                18.dp.toPx()
+                            }
                             drawCircle(
                                 color = Color.White.copy(alpha = 0.18f),
                                 radius = radius,
@@ -1233,8 +1394,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             }
 
             // A fresh box (or a tap on an existing one) raises the keyboard after the layout settles.
-            LaunchedEffect(textFocusToken, selectedTextId, tab) {
-                if (tab != EditorTab.Text || selectedTextId == null) return@LaunchedEffect
+            // Only those explicit taps bump the token, so grabbing a corner or knob never opens the
+            // keyboard mid-drag and resizes the preview under the finger.
+            LaunchedEffect(textFocusToken) {
+                if (textFocusToken == 0 || tab != EditorTab.Text || selectedTextId == null) {
+                    return@LaunchedEffect
+                }
                 delay(60)
                 runCatching { textFocusRequester.requestFocus() }
                 keyboardController?.show()
@@ -1320,16 +1485,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 EditorTab.Draw -> DrawPanel(
                     color = drawColor,
                     brushWidth = drawWidth,
-                    eraser = eraser,
+                    mode = drawMode,
                     enabled = !saving && preview != null,
                     onSelectColor = {
                         drawColor = it
-                        eraser = false
+                        if (drawMode == DrawMode.Eraser) drawMode = DrawMode.Brush
                     },
                     onBrushWidthChange = { drawWidth = it },
-                    onEraserChange = {
-                        eraser = it
-                        eraserCursor = null
+                    onModeChange = { mode ->
+                        drawMode = mode
+                        toolCursor = null
                     }
                 )
 
@@ -1348,6 +1513,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     if (tab == EditorTab.Text && selected != EditorTab.Text) {
                         discardBlankText()
                         selectedTextId = null
+                        textEditorFocused = false
                     }
                     tab = selected
                     openPanel = EditorPanel.None
@@ -1355,9 +1521,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     cropGestureStart = null
                     strokeGestureStart = null
                     eraseGestureStart = null
+                    blurGestureStart = null
                     textGestureStart = null
                     textGesture = null
-                    eraserCursor = null
+                    toolCursor = null
                 }
             )
         }

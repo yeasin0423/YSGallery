@@ -318,12 +318,12 @@ internal fun FilterPanel(
     }
 }
 
-/** Brush / eraser switch for the drawing tab. */
+/** Brush / eraser / blur switch for the drawing tab. */
 @Composable
 private fun DrawModeToggle(
-    eraser: Boolean,
+    mode: DrawMode,
     enabled: Boolean,
-    onEraserChange: (Boolean) -> Unit
+    onModeChange: (DrawMode) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Row(
@@ -335,14 +335,18 @@ private fun DrawModeToggle(
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        listOf(false to strings.brush, true to strings.eraser).forEach { (value, label) ->
-            val selected = value == eraser
+        listOf(
+            DrawMode.Brush to strings.brush,
+            DrawMode.Eraser to strings.eraser,
+            DrawMode.Blur to strings.blur
+        ).forEach { (value, label) ->
+            val selected = value == mode
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(CircleShape)
                     .background(if (selected) palette.accent else Color.Transparent)
-                    .clickable(enabled = enabled) { onEraserChange(value) }
+                    .clickable(enabled = enabled) { onModeChange(value) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -391,16 +395,16 @@ private fun DrawColorRow(color: Color, enabled: Boolean, onSelectColor: (Color) 
     }
 }
 
-/** Freehand drawing: brush or eraser, colours and a brush-size slider. */
+/** Freehand drawing: brush, eraser or blur brush, colours and a brush-size slider. */
 @Composable
 internal fun DrawPanel(
     color: Color,
     brushWidth: Float,
-    eraser: Boolean,
+    mode: DrawMode,
     enabled: Boolean,
     onSelectColor: (Color) -> Unit,
     onBrushWidthChange: (Float) -> Unit,
-    onEraserChange: (Boolean) -> Unit
+    onModeChange: (DrawMode) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Column(
@@ -408,10 +412,12 @@ internal fun DrawPanel(
             .fillMaxWidth()
             .padding(top = 8.dp, bottom = 12.dp)
     ) {
-        DrawModeToggle(eraser = eraser, enabled = enabled, onEraserChange = onEraserChange)
-        if (!eraser) {
+        DrawModeToggle(mode = mode, enabled = enabled, onModeChange = onModeChange)
+        if (mode == DrawMode.Brush) {
             Spacer(modifier = Modifier.height(8.dp))
             DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
+        }
+        if (mode != DrawMode.Eraser) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
