@@ -773,6 +773,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 }
             }
 
+            // The cross removes the box on touch-down, so it never becomes a drag.
+            TextHandle.Delete -> Unit
             TextHandle.None -> Unit
         }
     }
