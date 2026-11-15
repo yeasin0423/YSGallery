@@ -383,7 +383,10 @@ object MediaEditor {
         val x = (overlay.center.x - crop.left) * (source.width / crop.width)
         val y = (overlay.center.y - crop.top) * (source.height / crop.height)
         val metrics = paint.fontMetrics
+        val save = canvas.save()
+        canvas.rotate(overlay.rotation, x, y)
         canvas.drawText(overlay.text, x, y - (metrics.ascent + metrics.descent) / 2f, paint)
+        canvas.restoreToCount(save)
         return output
     }
 

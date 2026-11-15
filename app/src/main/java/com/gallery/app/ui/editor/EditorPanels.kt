@@ -58,7 +58,8 @@ internal fun EditorTabs(selected: EditorTab, enabled: Boolean, onSelect: (Editor
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
             .clip(CircleShape)
             .background(palette.surface)
             .padding(4.dp),
@@ -109,7 +110,6 @@ internal fun AdjustPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(top = 8.dp, bottom = 14.dp)
     ) {
         Row(
@@ -270,7 +270,6 @@ internal fun FilterPanel(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -408,7 +407,6 @@ internal fun DrawPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(top = 8.dp, bottom = 12.dp)
     ) {
         DrawModeToggle(eraser = eraser, enabled = enabled, onEraserChange = onEraserChange)
@@ -473,7 +471,6 @@ internal fun TextPanel(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(top = 10.dp, bottom = 12.dp)
     ) {
         ThemedTextField(

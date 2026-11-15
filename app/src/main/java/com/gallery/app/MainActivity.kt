@@ -825,7 +825,9 @@ private fun hasAllFilesAccess(): Boolean =
 private fun openAllFilesAccessSettings(context: Context) {
     if (!canManageAllFiles()) return
     val packageUri = android.net.Uri.fromParts("package", context.packageName, null)
-    val appPage = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION, packageUri)
+    // ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION is the per-app toggle; the plain action shows the
+    // full list on vendor ROMs that ignore the package URI.
+    val appPage = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri)
     val listPage = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
     runCatching { context.startActivity(appPage) }
         .recoverCatching { context.startActivity(listPage) }

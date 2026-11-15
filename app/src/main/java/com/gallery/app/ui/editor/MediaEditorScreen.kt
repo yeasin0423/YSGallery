@@ -20,7 +20,10 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -33,7 +36,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -81,6 +83,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -89,6 +92,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -112,6 +116,7 @@ import com.gallery.app.ui.theme.onAccent
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -138,6 +143,17 @@ private data class EditorSnapshot(
 )
 
 private const val MaxHistory = 60
+
+/** A text-box drag in progress: which control was grabbed and the label state when it began. */
+private data class TextGesture(
+    val handle: TextHandle,
+    val start: Offset,
+    val center: Offset,
+    val rotation: Float,
+    val size: Float,
+    val startAngle: Float,
+    val startDistance: Float
+)
 
 private const val MIN_CROP = 0.1f
 
@@ -170,6 +186,7 @@ private sealed interface CropRatio {
 fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     val context = LocalContext.current
     val palette = LocalAppTheme.current.palette
+    val density = LocalDensity.current
     val onEdited = LocalOnMediaEdited.current
     val scope = rememberCoroutineScope()
 
@@ -196,6 +213,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     // Live points of the stroke under the finger; a snapshot list keeps long strokes cheap to extend.
     val activePoints = remember { mutableStateListOf<Offset>() }
     var eraser by remember { mutableStateOf(false) }
+    // Where the eraser finger is, so the white cursor circle can show the area it will clear.
+    var eraserCursor by remember { mutableStateOf<Offset?>(null) }
     var textOverlay by remember { mutableStateOf<TextOverlay?>(null) }
     var textColor by remember { mutableStateOf(Color.White) }
     var textSize by remember { mutableFloatStateOf(DefaultTextSize) }
@@ -217,7 +236,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var cropGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var strokeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var eraseGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
-    var textMoveGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var textGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var textGesture by remember { mutableStateOf<TextGesture?>(null) }
     var textSizeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
 
     var openPanel by remember { mutableStateOf(EditorPanel.None) }
@@ -286,7 +306,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         cropGestureStart = null
         strokeGestureStart = null
         eraseGestureStart = null
-        textMoveGestureStart = null
+        textGestureStart = null
+        textGesture = null
         textSizeGestureStart = null
         openPanel = EditorPanel.None
     }
@@ -484,20 +505,102 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         eraseGestureStart = null
     }
 
-    fun beginTextMove(position: Offset, rect: Rect) {
-        if (textOverlay == null || !rect.contains(position)) return
-        textMoveGestureStart = snapshot()
+    /**
+     * Measures a label's selection box in view pixels with the same paint the preview and export use,
+     * padded so the outline never sits on the glyphs themselves.
+     */
+    fun textBoxOf(overlay: TextOverlay, rect: Rect): TextBox {
+        val frameMin = min(rect.width, rect.height)
+        textPaint.textSize = overlay.size * frameMin
+        val metrics = textPaint.fontMetrics
+        val padX = with(density) { 10.dp.toPx() }
+        val padY = with(density) { 5.dp.toPx() }
+        return TextBox(
+            center = Offset(
+                rect.left + overlay.center.x * rect.width,
+                rect.top + overlay.center.y * rect.height
+            ),
+            halfWidth = textPaint.measureText(overlay.text).coerceAtLeast(1f) / 2f + padX,
+            halfHeight = (metrics.descent - metrics.ascent).coerceAtLeast(1f) / 2f + padY,
+            rotation = overlay.rotation,
+            handleGap = with(density) { 26.dp.toPx() }
+        )
     }
 
-    fun moveText(position: Offset, rect: Rect) {
-        if (textMoveGestureStart == null) return
+    /** Grabs a corner (resize), the floating knob (rotate) or the label itself (move). */
+    fun beginTextGesture(position: Offset, rect: Rect) {
+        val overlay = textOverlay?.takeIf { it.text.isNotBlank() } ?: return
+        val box = textBoxOf(overlay, rect)
+        val handle = box.hitTest(position, touchRadius = with(density) { 22.dp.toPx() })
+        if (handle == TextHandle.None) return
+        val fromCenter = position - box.center
+        textGesture = TextGesture(
+            handle = handle,
+            start = position,
+            center = overlay.center,
+            rotation = overlay.rotation,
+            size = overlay.size,
+            startAngle = Math.toDegrees(atan2(fromCenter.y.toDouble(), fromCenter.x.toDouble())).toFloat(),
+            startDistance = max(fromCenter.getDistance(), 1f)
+        )
+        textGestureStart = snapshot()
+    }
+
+    /** Applies an in-progress text drag; one undo step is recorded when it ends. */
+    fun updateTextGesture(position: Offset, rect: Rect) {
+        val gesture = textGesture ?: return
         val overlay = textOverlay ?: return
-        textOverlay = overlay.copy(center = normalizedPoint(position, rect))
+        when (gesture.handle) {
+            TextHandle.Move -> {
+                val dx = (position.x - gesture.start.x) / rect.width
+                val dy = (position.y - gesture.start.y) / rect.height
+                textOverlay = overlay.copy(
+                    center = Offset(
+                        (gesture.center.x + dx).coerceIn(0f, 1f),
+                        (gesture.center.y + dy).coerceIn(0f, 1f)
+                    )
+                )
+            }
+
+            TextHandle.Rotate -> {
+                val center = Offset(
+                    rect.left + gesture.center.x * rect.width,
+                    rect.top + gesture.center.y * rect.height
+                )
+                val offset = position - center
+                val degrees =
+                    Math.toDegrees(atan2(offset.y.toDouble(), offset.x.toDouble())).toFloat()
+                // Fold the delta into one turn so crossing the -180/180 seam doesn't snap the label.
+                var delta = degrees - gesture.startAngle
+                while (delta > 180f) delta -= 360f
+                while (delta < -180f) delta += 360f
+                var rotation = (gesture.rotation + delta) % 360f
+                if (rotation < 0f) rotation += 360f
+                textOverlay = overlay.copy(rotation = rotation)
+            }
+
+            TextHandle.Resize -> {
+                val center = Offset(
+                    rect.left + gesture.center.x * rect.width,
+                    rect.top + gesture.center.y * rect.height
+                )
+                val distance = (position - center).getDistance()
+                val size = (gesture.size * (distance / gesture.startDistance))
+                    .coerceIn(MinTextSize, MaxTextSize)
+                if (size != overlay.size) {
+                    textSize = size
+                    textOverlay = overlay.copy(size = size)
+                }
+            }
+
+            TextHandle.None -> Unit
+        }
     }
 
-    fun finishTextMove() {
-        textMoveGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
-        textMoveGestureStart = null
+    fun finishTextGesture() {
+        textGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+        textGestureStart = null
+        textGesture = null
     }
 
     /** Typing the first character of a label is the undo boundary; later keystrokes refine it. */
@@ -670,33 +773,47 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         }
                         .pointerInput(imageRect, cropAspect, tab) {
                             if (tab == EditorTab.Draw) {
-                                detectDragGestures(
-                                    onDragStart = { position ->
-                                        if (eraser) beginErase() else beginStroke(position, imageRect)
-                                    },
-                                    onDrag = { change, _ ->
-                                        change.consume()
-                                        if (eraser) {
-                                            eraseAt(change.position, imageRect, 18.dp.toPx())
-                                        } else {
+                                val eraseRadius = 18.dp.toPx()
+                                // A raw down/drag loop keeps the eraser cursor under the finger from the
+                                // first touch and paints a dot for a tap, which the slop-based detector
+                                // would swallow.
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    if (eraser) {
+                                        eraserCursor = down.position
+                                        beginErase()
+                                        eraseAt(down.position, imageRect, eraseRadius)
+                                        drag(down.id) { change ->
+                                            change.consume()
+                                            eraserCursor = change.position
+                                            eraseAt(change.position, imageRect, eraseRadius)
+                                        }
+                                        eraserCursor = null
+                                        finishErase()
+                                    } else {
+                                        beginStroke(down.position, imageRect)
+                                        drag(down.id) { change ->
+                                            change.consume()
                                             extendStroke(change.position, imageRect)
                                         }
-                                    },
-                                    onDragEnd = { if (eraser) finishErase() else finishStroke() },
-                                    onDragCancel = { if (eraser) finishErase() else finishStroke() }
-                                )
+                                        finishStroke()
+                                    }
+                                }
                                 return@pointerInput
                             }
                             if (tab == EditorTab.Text) {
-                                detectDragGestures(
-                                    onDragStart = { position -> beginTextMove(position, imageRect) },
-                                    onDrag = { change, _ ->
+                                // Grab the handle from the exact touch-down point, then follow the finger
+                                // without slop so the box tracks it one-to-one.
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    beginTextGesture(down.position, imageRect)
+                                    if (textGesture == null) return@awaitEachGesture
+                                    drag(down.id) { change ->
                                         change.consume()
-                                        moveText(change.position, imageRect)
-                                    },
-                                    onDragEnd = { finishTextMove() },
-                                    onDragCancel = { finishTextMove() }
-                                )
+                                        updateTextGesture(change.position, imageRect)
+                                    }
+                                    finishTextGesture()
+                                }
                                 return@pointerInput
                             }
                             if (tab != EditorTab.Crop) return@pointerInput
@@ -775,11 +892,80 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             val centerY = imageRect.top + overlay.center.y * imageRect.height
                             val metrics = textPaint.fontMetrics
                             drawIntoCanvas { canvas ->
-                                canvas.nativeCanvas.drawText(
+                                val native = canvas.nativeCanvas
+                                val save = native.save()
+                                native.rotate(overlay.rotation, centerX, centerY)
+                                native.drawText(
                                     overlay.text,
                                     centerX,
                                     centerY - (metrics.ascent + metrics.descent) / 2f,
                                     textPaint
+                                )
+                                native.restoreToCount(save)
+                            }
+                        }
+                    }
+                    // The selection box sits above the clip so an off-crop label can still be grabbed.
+                    if (tab == EditorTab.Text) {
+                        textOverlay?.takeIf { it.text.isNotBlank() }?.let { overlay ->
+                            val box = textBoxOf(overlay, imageRect)
+                            val accent = palette.accent
+                            val cornerRadius = 6.dp.toPx()
+                            rotate(degrees = overlay.rotation, pivot = box.center) {
+                                drawRect(
+                                    color = accent.copy(alpha = 0.10f),
+                                    topLeft = Offset(
+                                        box.center.x - box.halfWidth,
+                                        box.center.y - box.halfHeight
+                                    ),
+                                    size = Size(box.halfWidth * 2f, box.halfHeight * 2f)
+                                )
+                                drawRect(
+                                    color = accent,
+                                    topLeft = Offset(
+                                        box.center.x - box.halfWidth,
+                                        box.center.y - box.halfHeight
+                                    ),
+                                    size = Size(box.halfWidth * 2f, box.halfHeight * 2f),
+                                    style = Stroke(1.5.dp.toPx())
+                                )
+                                val knob = Offset(box.center.x, box.center.y - box.halfHeight)
+                                drawLine(
+                                    color = accent,
+                                    start = knob,
+                                    end = Offset(knob.x, knob.y - box.handleGap),
+                                    strokeWidth = 1.5.dp.toPx()
+                                )
+                                // White fill keeps the handles visible on bright photos.
+                                listOf(
+                                    Offset(box.center.x - box.halfWidth, box.center.y - box.halfHeight),
+                                    Offset(box.center.x + box.halfWidth, box.center.y - box.halfHeight),
+                                    Offset(box.center.x - box.halfWidth, box.center.y + box.halfHeight),
+                                    Offset(box.center.x + box.halfWidth, box.center.y + box.halfHeight)
+                                ).forEach { corner ->
+                                    drawCircle(Color.White, cornerRadius, corner)
+                                    drawCircle(accent, cornerRadius, corner, style = Stroke(2.dp.toPx()))
+                                }
+                                val rotateKnob = Offset(knob.x, knob.y - box.handleGap)
+                                drawCircle(Color.White, cornerRadius + 1.dp.toPx(), rotateKnob)
+                                drawCircle(
+                                    accent,
+                                    cornerRadius + 1.dp.toPx(),
+                                    rotateKnob,
+                                    style = Stroke(2.dp.toPx())
+                                )
+                                // A small arc hints that this knob turns the label.
+                                drawArc(
+                                    color = accent,
+                                    startAngle = 200f,
+                                    sweepAngle = 140f,
+                                    useCenter = false,
+                                    topLeft = Offset(
+                                        rotateKnob.x - cornerRadius / 2f,
+                                        rotateKnob.y - cornerRadius / 2f
+                                    ),
+                                    size = Size(cornerRadius, cornerRadius),
+                                    style = Stroke(1.5.dp.toPx())
                                 )
                             }
                         }
@@ -825,23 +1011,32 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             drawLine(handleColor, corner, Offset(corner.x, corner.y + handleLength * dy), handleStroke)
                         }
                     }
+                    // The eraser cursor: a white ring around the area a drag clears, with a faint
+                    // shadow ring so it stays visible on white photos.
+                    if (tab == EditorTab.Draw && eraser) {
+                        eraserCursor?.let { point ->
+                            val radius = 18.dp.toPx()
+                            drawCircle(
+                                color = Color.White.copy(alpha = 0.18f),
+                                radius = radius,
+                                center = point
+                            )
+                            drawCircle(
+                                color = Color.Black.copy(alpha = 0.35f),
+                                radius = radius + 1.5.dp.toPx(),
+                                center = point,
+                                style = Stroke(2.5.dp.toPx())
+                            )
+                            drawCircle(
+                                color = Color.White,
+                                radius = radius,
+                                center = point,
+                                style = Stroke(2.dp.toPx())
+                            )
+                        }
+                    }
                 }
             }
-
-            EditorTabs(
-                selected = tab,
-                enabled = !saving,
-                onSelect = { selected ->
-                    tab = selected
-                    openPanel = EditorPanel.None
-                    adjustGestureStart = null
-                    cropGestureStart = null
-                    strokeGestureStart = null
-                    eraseGestureStart = null
-                    textMoveGestureStart = null
-                    textSizeGestureStart = null
-                }
-            )
 
             when (tab) {
                 EditorTab.Crop -> {
@@ -930,7 +1125,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         eraser = false
                     },
                     onBrushWidthChange = { drawWidth = it },
-                    onEraserChange = { eraser = it }
+                    onEraserChange = {
+                        eraser = it
+                        eraserCursor = null
+                    }
                 )
 
                 EditorTab.Text -> TextPanel(
@@ -944,6 +1142,24 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     onSizeChangeFinished = ::finishTextSize
                 )
             }
+
+            // The section pills sit at the very bottom; their controls open in the space above them.
+            EditorTabs(
+                selected = tab,
+                enabled = !saving,
+                onSelect = { selected ->
+                    tab = selected
+                    openPanel = EditorPanel.None
+                    adjustGestureStart = null
+                    cropGestureStart = null
+                    strokeGestureStart = null
+                    eraseGestureStart = null
+                    textGestureStart = null
+                    textGesture = null
+                    textSizeGestureStart = null
+                    eraserCursor = null
+                }
+            )
         }
 
         if (saving) {
@@ -1018,14 +1234,14 @@ private fun EditorTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .height(64.dp)
+            .height(68.dp)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         val closeInteraction = remember { MutableInteractionSource() }
         Box(
             modifier = Modifier
-                .size(46.dp)
+                .size(48.dp)
                 .pressScale(closeInteraction, 0.9f)
                 .clip(CircleShape)
                 .background(palette.surface)
@@ -1041,7 +1257,7 @@ private fun EditorTopBar(
                 imageVector = Icons.Rounded.Close,
                 contentDescription = strings.close,
                 tint = if (closeEnabled) palette.onBackground else palette.textMuted,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(25.dp)
             )
         }
         Text(
@@ -1059,21 +1275,23 @@ private fun EditorTopBar(
             icon = Icons.AutoMirrored.Rounded.Undo,
             contentDescription = strings.undo,
             enabled = undoEnabled,
-            iconSize = 24.dp,
+            iconSize = 26.dp,
             onClick = onUndo
         )
+        Spacer(modifier = Modifier.width(2.dp))
         TopBarIconButton(
             icon = Icons.AutoMirrored.Rounded.Redo,
             contentDescription = strings.redo,
             enabled = redoEnabled,
-            iconSize = 24.dp,
+            iconSize = 26.dp,
             onClick = onRedo
         )
+        Spacer(modifier = Modifier.width(2.dp))
         TopBarIconButton(
             icon = Icons.Rounded.Restore,
             contentDescription = strings.reset,
             enabled = resetEnabled,
-            iconSize = 23.dp,
+            iconSize = 26.dp,
             onClick = onReset
         )
         Spacer(modifier = Modifier.width(4.dp))
@@ -1100,7 +1318,7 @@ private fun TopBarIconButton(
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(44.dp)
             .pressScale(interaction, 0.9f)
             .clip(CircleShape)
             .clickable(
@@ -1208,7 +1426,6 @@ private fun EditorToolbar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding()
             .padding(horizontal = 8.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
