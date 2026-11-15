@@ -16,7 +16,12 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,6 +48,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.automirrored.rounded.Undo
@@ -71,7 +78,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -79,6 +90,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -93,7 +105,10 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -113,6 +128,7 @@ import com.gallery.app.ui.design.pressScale
 import com.gallery.app.ui.i18n.strings
 import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.theme.onAccent
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.abs
@@ -233,6 +249,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             typeface = Typeface.DEFAULT_BOLD
         }
     }
+    // A hidden field owns the keyboard; the label and its caret are drawn on the photo itself.
+    val textFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var textEditorFocused by remember { mutableStateOf(false) }
+    val caretAlpha by rememberInfiniteTransition(label = "textCaret").animateFloat(
+        initialValue = 1f,
+        targetValue = 0.12f,
+        animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
+        label = "textCaretAlpha"
+    )
 
     var undoStack by remember { mutableStateOf<List<EditorSnapshot>>(emptyList()) }
     var redoStack by remember { mutableStateOf<List<EditorSnapshot>>(emptyList()) }
@@ -585,9 +611,18 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         createText(normalizedPoint(position, rect))
     }
 
+    /** Removes a label; an empty box leaves no undo step behind. */
+    fun deleteText(overlay: TextOverlay) {
+        if (overlay.text.isNotBlank()) pushHistory()
+        textOverlays = textOverlays.filterNot { it.id == overlay.id }
+        if (selectedTextId == overlay.id) selectedTextId = null
+        pendingTextCreate = null
+        textEditorFocused = false
+    }
+
     /**
-     * Grabs a box's corner (resize), floating knob (rotate) or body (move), and selects it first so the
-     * panel edits the label the finger touched.
+     * Grabs a box's corner (resize), floating knob (rotate), cross (remove) or body (move), and selects
+     * it first so the panel edits the label the finger touched.
      */
     fun beginTextGesture(position: Offset, rect: Rect): Boolean {
         val overlay = textHitAt(position, rect) ?: return false
@@ -595,6 +630,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         val box = textBoxOf(overlay, rect)
         val handle = box.hitTest(position, with(density) { 22.dp.toPx() })
         if (handle == TextHandle.None) return false
+        if (handle == TextHandle.Delete) {
+            deleteText(overlay)
+            return true
+        }
         // Any change other than typing makes the pre-creation snapshot stale.
         pendingTextCreate = null
         val fromCenter = position - box.center
@@ -883,11 +922,20 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
                                     if (beginTextGesture(down.position, imageRect)) {
+                                        val bodyGrab = textGesture?.handle == TextHandle.Move
+                                        var moved = false
+                                        val tapSlop = 8.dp.toPx()
                                         drag(down.id) { change ->
                                             change.consume()
+                                            if ((change.position - down.position).getDistance() > tapSlop) {
+                                                moved = true
+                                            }
                                             updateTextGesture(change.position, imageRect)
                                         }
                                         finishTextGesture()
+                                        // Tapping the label (rather than dragging it) opens the
+                                        // keyboard, so the caret appears inside the box.
+                                        if (bodyGrab && !moved) textFocusToken += 1
                                     } else {
                                         // A pan over empty canvas does nothing; only a tap adds a box.
                                         var moved = false
@@ -1055,6 +1103,45 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     size = Size(cornerRadius, cornerRadius),
                                     style = Stroke(1.5.dp.toPx())
                                 )
+                                // The cross removes this box outright; it is hit-tested before the
+                                // corners so it never gets swallowed by the resize target. Coordinates
+                                // stay unrotated here because the whole block is already inside the
+                                // label's rotation.
+                                val gap = box.handleGap * 0.8f
+                                val delete = Offset(
+                                    box.center.x - box.halfWidth - gap,
+                                    box.center.y - box.halfHeight - gap
+                                )
+                                val deleteRadius = cornerRadius
+                                drawCircle(Color.White, deleteRadius, delete)
+                                drawCircle(accent, deleteRadius, delete, style = Stroke(2.dp.toPx()))
+                                val arm = deleteRadius * 0.5f
+                                drawLine(
+                                    color = accent,
+                                    start = Offset(delete.x - arm, delete.y - arm),
+                                    end = Offset(delete.x + arm, delete.y + arm),
+                                    strokeWidth = 1.8.dp.toPx()
+                                )
+                                drawLine(
+                                    color = accent,
+                                    start = Offset(delete.x - arm, delete.y + arm),
+                                    end = Offset(delete.x + arm, delete.y - arm),
+                                    strokeWidth = 1.8.dp.toPx()
+                                )
+                                // The caret blinks at the end of the text while typing, so the user sees
+                                // where the characters land without any field on the panel.
+                                if (textEditorFocused) {
+                                    textPaint.textSize = overlay.size * frameMin
+                                    val endX = box.center.x + textPaint.measureText(overlay.text) / 2f +
+                                            2.dp.toPx()
+                                    val metrics = textPaint.fontMetrics
+                                    drawLine(
+                                        color = overlay.color.copy(alpha = caretAlpha),
+                                        start = Offset(endX, box.center.y + metrics.ascent),
+                                        end = Offset(endX, box.center.y + metrics.descent),
+                                        strokeWidth = 2.dp.toPx()
+                                    )
+                                }
                             }
                         }
                     }
@@ -1124,6 +1211,33 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         }
                     }
                 }
+
+                // A transparent field owns the IME while the label is typed; the glyphs and the caret
+                // are painted on the canvas above, so the box itself stays fully draggable.
+                val editing = selectedText()
+                if (tab == EditorTab.Text && editing != null) {
+                    BasicTextField(
+                        value = editing.text,
+                        onValueChange = ::changeText,
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp),
+                        cursorBrush = SolidColor(Color.Transparent),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        modifier = Modifier
+                            .size(1.dp)
+                            .alpha(0f)
+                            .focusRequester(textFocusRequester)
+                            .onFocusChanged { textEditorFocused = it.isFocused }
+                    )
+                }
+            }
+
+            // A fresh box (or a tap on an existing one) raises the keyboard after the layout settles.
+            LaunchedEffect(textFocusToken, selectedTextId, tab) {
+                if (tab != EditorTab.Text || selectedTextId == null) return@LaunchedEffect
+                delay(60)
+                runCatching { textFocusRequester.requestFocus() }
+                keyboardController?.show()
             }
 
             when (tab) {
@@ -1220,11 +1334,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 )
 
                 EditorTab.Text -> TextPanel(
-                    text = selectedText()?.text.orEmpty(),
                     color = selectedText()?.color ?: textColor,
                     enabled = !saving && preview != null,
-                    autoFocusKey = textFocusToken,
-                    onTextChange = ::changeText,
                     onSelectColor = ::chooseTextColor
                 )
             }

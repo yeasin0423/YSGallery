@@ -32,7 +32,7 @@ fun createTextOverlay(text: String, center: Offset, color: Color, size: Float): 
     TextOverlay(text = text, center = center, color = color, size = size, id = ++nextTextId)
 
 /** The part of the text selection box a drag grabbed. */
-internal enum class TextHandle { None, Move, Resize, Rotate }
+internal enum class TextHandle { None, Move, Resize, Rotate, Delete }
 
 /**
  * The label's selection box in view pixels: a rectangle of [halfWidth] x [halfHeight] around [center],
@@ -69,6 +69,10 @@ internal data class TextBox(
     fun rotateHandle(): Offset =
         center + rotate(Offset(0f, -halfHeight - handleGap), rotation)
 
+    /** The remove cross, just outside the top-left corner. */
+    fun deleteHandle(): Offset =
+        center + rotate(Offset(-halfWidth - handleGap * 0.8f, -halfHeight - handleGap * 0.8f), rotation)
+
     fun contains(point: Offset): Boolean {
         val local = toLocal(point)
         return abs(local.x) <= halfWidth && abs(local.y) <= halfHeight
@@ -76,6 +80,7 @@ internal data class TextBox(
 
     /** Which control sits under [point], given the radius a finger may miss by. */
     fun hitTest(point: Offset, touchRadius: Float): TextHandle {
+        if ((point - deleteHandle()).getDistance() <= touchRadius) return TextHandle.Delete
         if ((point - rotateHandle()).getDistance() <= touchRadius) return TextHandle.Rotate
         val local = toLocal(point)
         if (localCorners().any { (it - local).getDistance() <= touchRadius }) return TextHandle.Resize

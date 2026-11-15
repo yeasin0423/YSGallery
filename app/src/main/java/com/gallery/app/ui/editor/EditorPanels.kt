@@ -29,7 +29,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +43,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gallery.app.ui.i18n.strings
-import com.gallery.app.ui.design.ThemedTextField
 import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.theme.onAccent
 import kotlin.math.min
@@ -457,17 +455,13 @@ internal fun DrawPanel(
 }
 
 /**
- * Text label editor: the string itself and its colour. Size is set by dragging a corner of the box on
- * the photo, so there is no slider. [autoFocusKey] changes when a new box is created, which recreates
- * the field and raises the keyboard for immediate typing.
+ * Text label editor: the colour only. Typing happens inside the box on the photo, and size is set by
+ * dragging a corner there, so the panel is just the palette and a short hint.
  */
 @Composable
 internal fun TextPanel(
-    text: String,
     color: Color,
     enabled: Boolean,
-    autoFocusKey: Int,
-    onTextChange: (String) -> Unit,
     onSelectColor: (Color) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
@@ -476,16 +470,6 @@ internal fun TextPanel(
             .fillMaxWidth()
             .padding(top = 10.dp, bottom = 12.dp)
     ) {
-        key(autoFocusKey) {
-            ThemedTextField(
-                value = text,
-                onValueChange = onTextChange,
-                placeholder = strings.textHint,
-                autoFocus = autoFocusKey > 0,
-                modifier = Modifier.padding(horizontal = 20.dp)
-            )
-        }
-        Spacer(modifier = Modifier.height(10.dp))
         DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
         Text(
             text = strings.textTapHint,

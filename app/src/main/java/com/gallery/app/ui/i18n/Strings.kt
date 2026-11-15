@@ -67,7 +67,6 @@ interface AppStrings {
     val eraser: String
     val brush: String
     val text: String
-    val textHint: String
     val textTapHint: String
     val brushSize: String
     val undo: String
@@ -401,8 +400,7 @@ object EnglishStrings : AppStrings {
     override val eraser = "Eraser"
     override val brush = "Brush"
     override val text = "Text"
-    override val textHint = "Add text"
-    override val textTapHint = "Tap the photo to add a text box. Drag a corner to resize, the knob to rotate."
+    override val textTapHint = "Tap the photo to add a box and type in it. Drag a corner to resize, the knob to rotate, the × to remove."
     override val brushSize = "Brush size"
     override val undo = "Undo"
     override val redo = "Redo"
