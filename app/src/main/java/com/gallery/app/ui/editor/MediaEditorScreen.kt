@@ -3,6 +3,8 @@ package com.gallery.app.ui.editor
 import android.app.Activity
 import android.app.PendingIntent
 import android.graphics.Bitmap
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,6 +32,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -77,7 +80,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -127,7 +133,8 @@ private data class EditorSnapshot(
     val ratio: CropRatio,
     val adjustments: EditorAdjustments,
     val filter: EditorFilter,
-    val strokes: List<DrawStroke>
+    val strokes: List<DrawStroke>,
+    val text: TextOverlay?
 )
 
 private const val MaxHistory = 60
@@ -188,8 +195,20 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var activeStroke by remember { mutableStateOf<DrawStroke?>(null) }
     // Live points of the stroke under the finger; a snapshot list keeps long strokes cheap to extend.
     val activePoints = remember { mutableStateListOf<Offset>() }
+    var eraser by remember { mutableStateOf(false) }
+    var textOverlay by remember { mutableStateOf<TextOverlay?>(null) }
+    var textColor by remember { mutableStateOf(Color.White) }
+    var textSize by remember { mutableFloatStateOf(DefaultTextSize) }
     var saving by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
+
+    // One text paint shared by every preview frame, so the preview matches the export's metrics.
+    val textPaint = remember {
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+    }
 
     var undoStack by remember { mutableStateOf<List<EditorSnapshot>>(emptyList()) }
     var redoStack by remember { mutableStateOf<List<EditorSnapshot>>(emptyList()) }
@@ -197,6 +216,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var adjustGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var cropGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var strokeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var eraseGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var textMoveGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var textSizeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
 
     var openPanel by remember { mutableStateOf(EditorPanel.None) }
     // Kept after closing so the collapse animation still has content to draw.
@@ -220,7 +242,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ColorFilter.colorMatrix(ColorMatrix(values = colorMatrix))
     }
     val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
-            !adjustments.isNeutral || filter.id != EditorFilterNone.id || strokes.isNotEmpty()
+            !adjustments.isNeutral || filter.id != EditorFilterNone.id || strokes.isNotEmpty() ||
+            textOverlay != null
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
     val canUndo = undoStack.isNotEmpty()
     val canRedo = redoStack.isNotEmpty()
@@ -233,7 +256,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ratio = ratio,
         adjustments = adjustments,
         filter = filter,
-        strokes = strokes
+        strokes = strokes,
+        text = textOverlay
     )
 
     /** Pushes [before] onto the undo stack and drops any redo branch. */
@@ -251,10 +275,19 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = state.adjustments
         filter = state.filter
         strokes = state.strokes
+        textOverlay = state.text
+        state.text?.let {
+            textColor = it.color
+            textSize = it.size
+        }
         activeStroke = null
+        activePoints.clear()
         adjustGestureStart = null
         cropGestureStart = null
         strokeGestureStart = null
+        eraseGestureStart = null
+        textMoveGestureStart = null
+        textSizeGestureStart = null
         openPanel = EditorPanel.None
     }
 
@@ -327,6 +360,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             fitCrop(crop, locked)
         }
         strokes = strokes.map { if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise() }
+        textOverlay = textOverlay?.let { if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise() }
         scope.launch {
             // A positive angle runs clockwise, so the preview spins in from the opposite side.
             rotateAnimation.snapTo(if (clockwise) -90f else 90f)
@@ -340,6 +374,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (rotation % 180 == 0) flipHorizontal = !flipHorizontal else flipVertical = !flipVertical
         crop = crop.flipHorizontal()
         strokes = strokes.map { it.flipHorizontal() }
+        textOverlay = textOverlay?.flipHorizontal()
         scope.launch {
             flipXAnimation.snapTo(-1f)
             flipXAnimation.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 350f))
@@ -351,6 +386,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (rotation % 180 == 0) flipVertical = !flipVertical else flipHorizontal = !flipHorizontal
         crop = crop.flipVertical()
         strokes = strokes.map { it.flipVertical() }
+        textOverlay = textOverlay?.flipVertical()
         scope.launch {
             flipYAnimation.snapTo(-1f)
             flipYAnimation.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 350f))
@@ -369,6 +405,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         filter = EditorFilterNone
         strokes = emptyList()
         activeStroke = null
+        textOverlay = null
+        eraser = false
         openPanel = EditorPanel.None
     }
 
@@ -420,11 +458,91 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (before != null) pushHistory(before)
     }
 
+    fun beginErase() {
+        eraseGestureStart = snapshot()
+    }
+
+    /** Removes every stroke that passes under the eraser. One undo step per erase gesture. */
+    fun eraseAt(position: Offset, rect: Rect, radiusPx: Float) {
+        if (strokes.isEmpty() || rect.width <= 0f || rect.height <= 0f) return
+        val touchX = (position.x - rect.left) / rect.width
+        val touchY = (position.y - rect.top) / rect.height
+        val remaining = strokes.filterNot { stroke ->
+            val reach = radiusPx + stroke.width * min(rect.width, rect.height) / 2f
+            val reachSquared = reach * reach
+            stroke.points.any { point ->
+                val dx = (point.x - touchX) * rect.width
+                val dy = (point.y - touchY) * rect.height
+                dx * dx + dy * dy <= reachSquared
+            }
+        }
+        if (remaining.size != strokes.size) strokes = remaining
+    }
+
+    fun finishErase() {
+        eraseGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+        eraseGestureStart = null
+    }
+
+    fun beginTextMove(position: Offset, rect: Rect) {
+        if (textOverlay == null || !rect.contains(position)) return
+        textMoveGestureStart = snapshot()
+    }
+
+    fun moveText(position: Offset, rect: Rect) {
+        if (textMoveGestureStart == null) return
+        val overlay = textOverlay ?: return
+        textOverlay = overlay.copy(center = normalizedPoint(position, rect))
+    }
+
+    fun finishTextMove() {
+        textMoveGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+        textMoveGestureStart = null
+    }
+
+    /** Typing the first character of a label is the undo boundary; later keystrokes refine it. */
+    fun changeText(value: String) {
+        val cleaned = value.replace('\n', ' ')
+        val existing = textOverlay
+        if (cleaned.isBlank()) {
+            if (existing != null) {
+                pushHistory()
+                textOverlay = null
+            }
+            return
+        }
+        if (existing == null) pushHistory()
+        // Keep a restored overlay's own colour and size; the panel state only seeds a new one.
+        textOverlay = (existing ?: TextOverlay(cleaned, Offset(0.5f, 0.5f), textColor, textSize))
+            .copy(text = cleaned)
+    }
+
+    fun chooseTextColor(color: Color) {
+        textColor = color
+        val overlay = textOverlay ?: return
+        if (overlay.color != color) {
+            pushHistory()
+            textOverlay = overlay.copy(color = color)
+        }
+    }
+
+    fun changeTextSize(size: Float) {
+        textSize = size
+        val overlay = textOverlay ?: return
+        if (textSizeGestureStart == null) textSizeGestureStart = snapshot()
+        textOverlay = overlay.copy(size = size)
+    }
+
+    fun finishTextSize() {
+        textSizeGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+        textSizeGestureStart = null
+    }
+
     fun saveCopy() {
         if (saving || !changed) return
         saving = true
         progress = 0f
-        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes)
+        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlay)
         scope.launch {
             if (item.isVideo) {
                 runCatching { MediaEditor.saveVideo(context, item, spec) { progress = it } }
@@ -455,7 +573,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (saving || !changed || !canOverwrite) return
         saving = true
         progress = 0f
-        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes)
+        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlay)
         scope.launch {
             runCatching { MediaEditor.saveImage(context, item, spec, overwrite = true) }
                 .onSuccess { result ->
@@ -493,7 +611,11 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             .background(palette.background)
             .blockTouchesBelow()
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+        ) {
             EditorTopBar(
                 closeEnabled = !saving,
                 saveEnabled = changed && !saving && preview != null,
@@ -549,13 +671,31 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         .pointerInput(imageRect, cropAspect, tab) {
                             if (tab == EditorTab.Draw) {
                                 detectDragGestures(
-                                    onDragStart = { position -> beginStroke(position, imageRect) },
+                                    onDragStart = { position ->
+                                        if (eraser) beginErase() else beginStroke(position, imageRect)
+                                    },
                                     onDrag = { change, _ ->
                                         change.consume()
-                                        extendStroke(change.position, imageRect)
+                                        if (eraser) {
+                                            eraseAt(change.position, imageRect, 18.dp.toPx())
+                                        } else {
+                                            extendStroke(change.position, imageRect)
+                                        }
                                     },
-                                    onDragEnd = { finishStroke() },
-                                    onDragCancel = { finishStroke() }
+                                    onDragEnd = { if (eraser) finishErase() else finishStroke() },
+                                    onDragCancel = { if (eraser) finishErase() else finishStroke() }
+                                )
+                                return@pointerInput
+                            }
+                            if (tab == EditorTab.Text) {
+                                detectDragGestures(
+                                    onDragStart = { position -> beginTextMove(position, imageRect) },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        moveText(change.position, imageRect)
+                                    },
+                                    onDragEnd = { finishTextMove() },
+                                    onDragCancel = { finishTextMove() }
                                 )
                                 return@pointerInput
                             }
@@ -627,9 +767,25 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                 strokeWidth = stroke.width * frameMin
                             )
                         }
+                        // Text sits on top of the ink, exactly like the exporter paints it.
+                        textOverlay?.takeIf { it.text.isNotBlank() }?.let { overlay ->
+                            textPaint.color = overlay.color.toArgb()
+                            textPaint.textSize = overlay.size * frameMin
+                            val centerX = imageRect.left + overlay.center.x * imageRect.width
+                            val centerY = imageRect.top + overlay.center.y * imageRect.height
+                            val metrics = textPaint.fontMetrics
+                            drawIntoCanvas { canvas ->
+                                canvas.nativeCanvas.drawText(
+                                    overlay.text,
+                                    centerX,
+                                    centerY - (metrics.ascent + metrics.descent) / 2f,
+                                    textPaint
+                                )
+                            }
+                        }
                     }
-                    // Ink is clipped to the crop; show its edge in Draw so nothing vanishes unexplained.
-                    if (tab == EditorTab.Draw && !crop.isFull) {
+                    // Ink and text are clipped to the crop; show its edge so nothing vanishes unexplained.
+                    if ((tab == EditorTab.Draw || tab == EditorTab.Text) && !crop.isFull) {
                         drawRect(
                             color = Color.White.copy(alpha = 0.35f),
                             topLeft = inkBounds.topLeft,
@@ -678,6 +834,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 onSelect = { selected ->
                     tab = selected
                     openPanel = EditorPanel.None
+                    adjustGestureStart = null
+                    cropGestureStart = null
+                    strokeGestureStart = null
+                    eraseGestureStart = null
+                    textMoveGestureStart = null
+                    textSizeGestureStart = null
                 }
             )
 
@@ -761,9 +923,25 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 EditorTab.Draw -> DrawPanel(
                     color = drawColor,
                     brushWidth = drawWidth,
+                    eraser = eraser,
                     enabled = !saving && preview != null,
-                    onSelectColor = { drawColor = it },
-                    onBrushWidthChange = { drawWidth = it }
+                    onSelectColor = {
+                        drawColor = it
+                        eraser = false
+                    },
+                    onBrushWidthChange = { drawWidth = it },
+                    onEraserChange = { eraser = it }
+                )
+
+                EditorTab.Text -> TextPanel(
+                    text = textOverlay?.text.orEmpty(),
+                    color = textOverlay?.color ?: textColor,
+                    textSize = textOverlay?.size ?: textSize,
+                    enabled = !saving && preview != null,
+                    onTextChange = ::changeText,
+                    onSelectColor = ::chooseTextColor,
+                    onSizeChange = ::changeTextSize,
+                    onSizeChangeFinished = ::finishTextSize
                 )
             }
         }

@@ -64,6 +64,11 @@ interface AppStrings {
     val adjust: String
     val filters: String
     val draw: String
+    val eraser: String
+    val brush: String
+    val text: String
+    val textHint: String
+    val textSize: String
     val brushSize: String
     val undo: String
     val redo: String
@@ -393,6 +398,11 @@ object EnglishStrings : AppStrings {
     override val adjust = "Adjust"
     override val filters = "Filters"
     override val draw = "Draw"
+    override val eraser = "Eraser"
+    override val brush = "Brush"
+    override val text = "Text"
+    override val textHint = "Add text"
+    override val textSize = "Text size"
     override val brushSize = "Brush size"
     override val undo = "Undo"
     override val redo = "Redo"

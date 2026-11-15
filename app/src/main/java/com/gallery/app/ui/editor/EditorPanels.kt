@@ -43,13 +43,14 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gallery.app.ui.i18n.strings
+import com.gallery.app.ui.design.ThemedTextField
 import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.theme.onAccent
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** The four bottom sections of the editor. Crop keeps the existing rotate/mirror/ratio tools. */
-internal enum class EditorTab { Crop, Adjust, Filters, Draw }
+/** The five bottom sections of the editor. Crop keeps the existing rotate/mirror/ratio tools. */
+internal enum class EditorTab { Crop, Adjust, Filters, Draw, Text }
 
 @Composable
 internal fun EditorTabs(selected: EditorTab, enabled: Boolean, onSelect: (EditorTab) -> Unit) {
@@ -90,6 +91,7 @@ private fun tabLabel(tab: EditorTab): String = when (tab) {
     EditorTab.Adjust -> strings.adjust
     EditorTab.Filters -> strings.filters
     EditorTab.Draw -> strings.draw
+    EditorTab.Text -> strings.text
 }
 
 /** One slider plus a scrollable row of the eight adjustment names. */
@@ -318,14 +320,89 @@ internal fun FilterPanel(
     }
 }
 
-/** Colour swatches and a brush-size slider for the freehand drawing tab. */
+/** Brush / eraser switch for the drawing tab. */
+@Composable
+private fun DrawModeToggle(
+    eraser: Boolean,
+    enabled: Boolean,
+    onEraserChange: (Boolean) -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(CircleShape)
+            .background(palette.surfaceVariant)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        listOf(false to strings.brush, true to strings.eraser).forEach { (value, label) ->
+            val selected = value == eraser
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(CircleShape)
+                    .background(if (selected) palette.accent else Color.Transparent)
+                    .clickable(enabled = enabled) { onEraserChange(value) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    color = if (selected) palette.onAccent else palette.onBackground,
+                    fontSize = 13.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                )
+            }
+        }
+    }
+}
+
+/** Shared colour swatches for the draw and text tabs. */
+@Composable
+private fun DrawColorRow(color: Color, enabled: Boolean, onSelectColor: (Color) -> Unit) {
+    val palette = LocalAppTheme.current.palette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        EditorDrawColors.forEach { swatch ->
+            val selected = swatch == color
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(if (selected) palette.accent else Color.Transparent)
+                    .clickable(enabled = enabled) { onSelectColor(swatch) },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(if (selected) 28.dp else 32.dp)
+                        .clip(CircleShape)
+                        .background(swatch)
+                        .border(1.dp, palette.onBackground.copy(alpha = 0.16f), CircleShape)
+                )
+            }
+        }
+    }
+}
+
+/** Freehand drawing: brush or eraser, colours and a brush-size slider. */
 @Composable
 internal fun DrawPanel(
     color: Color,
     brushWidth: Float,
+    eraser: Boolean,
     enabled: Boolean,
     onSelectColor: (Color) -> Unit,
-    onBrushWidthChange: (Float) -> Unit
+    onBrushWidthChange: (Float) -> Unit,
+    onEraserChange: (Boolean) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Column(
@@ -334,34 +411,79 @@ internal fun DrawPanel(
             .navigationBarsPadding()
             .padding(top = 8.dp, bottom = 12.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            EditorDrawColors.forEach { swatch ->
-                val selected = swatch == color
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(if (selected) palette.accent else Color.Transparent)
-                        .clickable(enabled = enabled) { onSelectColor(swatch) },
-                    contentAlignment = Alignment.Center
-                ) {
+        DrawModeToggle(eraser = eraser, enabled = enabled, onEraserChange = onEraserChange)
+        if (!eraser) {
+            Spacer(modifier = Modifier.height(8.dp))
+            DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 22.dp, end = 22.dp, top = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = strings.brushSize,
+                    color = palette.onBackground,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                // A dot that shows the current brush thickness.
+                Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
                     Box(
                         modifier = Modifier
-                            .size(if (selected) 28.dp else 32.dp)
+                            .size((brushWidth / MaxDrawWidth * 18f).coerceIn(4f, 18f).dp)
                             .clip(CircleShape)
-                            .background(swatch)
-                            .border(1.dp, palette.onBackground.copy(alpha = 0.16f), CircleShape)
+                            .background(color)
+                            .border(1.dp, palette.onBackground.copy(alpha = 0.2f), CircleShape)
                     )
                 }
             }
+            Slider(
+                value = brushWidth,
+                onValueChange = onBrushWidthChange,
+                valueRange = MinDrawWidth..MaxDrawWidth,
+                enabled = enabled,
+                colors = SliderDefaults.colors(
+                    thumbColor = palette.accent,
+                    activeTrackColor = palette.accent,
+                    inactiveTrackColor = palette.surfaceVariant,
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent
+                ),
+                modifier = Modifier.padding(horizontal = 14.dp)
+            )
         }
+    }
+}
+
+/** Text label editor: the string itself, its colour and its size. */
+@Composable
+internal fun TextPanel(
+    text: String,
+    color: Color,
+    textSize: Float,
+    enabled: Boolean,
+    onTextChange: (String) -> Unit,
+    onSelectColor: (Color) -> Unit,
+    onSizeChange: (Float) -> Unit,
+    onSizeChangeFinished: () -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(top = 10.dp, bottom = 12.dp)
+    ) {
+        ThemedTextField(
+            value = text,
+            onValueChange = onTextChange,
+            placeholder = strings.textHint,
+            modifier = Modifier.padding(horizontal = 20.dp)
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -369,27 +491,23 @@ internal fun DrawPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = strings.brushSize,
+                text = strings.textSize,
                 color = palette.onBackground,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(modifier = Modifier.weight(1f))
-            // A dot that shows the current brush thickness.
-            Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-                Box(
-                    modifier = Modifier
-                        .size((brushWidth / MaxDrawWidth * 18f).coerceIn(4f, 18f).dp)
-                        .clip(CircleShape)
-                        .background(color)
-                        .border(1.dp, palette.onBackground.copy(alpha = 0.2f), CircleShape)
-                )
-            }
+            Text(
+                text = "${(textSize * 100f).roundToInt()}%",
+                color = palette.textMuted,
+                fontSize = 13.sp
+            )
         }
         Slider(
-            value = brushWidth,
-            onValueChange = onBrushWidthChange,
-            valueRange = MinDrawWidth..MaxDrawWidth,
+            value = textSize,
+            onValueChange = onSizeChange,
+            onValueChangeFinished = onSizeChangeFinished,
+            valueRange = MinTextSize..MaxTextSize,
             enabled = enabled,
             colors = SliderDefaults.colors(
                 thumbColor = palette.accent,

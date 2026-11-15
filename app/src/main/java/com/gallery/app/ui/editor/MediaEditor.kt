@@ -12,6 +12,7 @@ import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -73,7 +74,7 @@ data class NormalizedRect(val left: Float, val top: Float, val right: Float, val
 /**
  * An edit: mirror first ([flipHorizontal]/[flipVertical] on the source frame), then rotate clockwise by
  * [rotation] degrees, then crop to [crop] (expressed in the resulting frame), then apply [colorMatrix]
- * (the combined adjustments and filter), then paint [drawStrokes] on top.
+ * (the combined adjustments and filter), then paint [drawStrokes] and [textOverlay] on top.
  */
 data class EditSpec(
     val rotation: Int,
@@ -81,7 +82,8 @@ data class EditSpec(
     val flipVertical: Boolean,
     val crop: NormalizedRect,
     val colorMatrix: FloatArray? = null,
-    val drawStrokes: List<DrawStroke> = emptyList()
+    val drawStrokes: List<DrawStroke> = emptyList(),
+    val textOverlay: TextOverlay? = null
 )
 
 /** Result of saving an edited image. */
@@ -261,11 +263,15 @@ object MediaEditor {
         // Adjustments and the selected filter are baked in after cropping so the export matches the preview.
         val colored = spec.colorMatrix?.let { applyColorMatrix(cropped, it) } ?: cropped
         // Ink is added last: in the preview it is drawn over the filtered image too.
-        val result = if (spec.drawStrokes.isEmpty()) {
+        val inked = if (spec.drawStrokes.isEmpty()) {
             colored
         } else {
             applyDrawStrokes(colored, spec.drawStrokes, crop, transformed.width, transformed.height)
         }
+        // The label sits above the ink, matching the order the preview draws them in.
+        val result = spec.textOverlay?.let {
+            applyTextOverlay(inked, it, crop, transformed.width, transformed.height)
+        } ?: inked
 
         val (format, extension, mimeType) = outputFormat(item, overwrite)
         val file = File(context.cacheDir, "edit_${System.currentTimeMillis()}.$extension")
@@ -281,7 +287,8 @@ object MediaEditor {
             file.delete()
             throw e
         } finally {
-            if (result !== colored) result.recycle()
+            if (result !== inked) result.recycle()
+            if (inked !== colored) inked.recycle()
             if (colored !== cropped) colored.recycle()
             if (cropped !== transformed) cropped.recycle()
             if (transformed !== decoded) transformed.recycle()
@@ -349,6 +356,34 @@ object MediaEditor {
                 canvas.drawPath(path, line)
             }
         }
+        return output
+    }
+
+    /**
+     * Paints the text label over the cropped bitmap. The preview uses the same bold sans-serif paint and
+     * baseline maths, so the label lands exactly where it was dragged.
+     */
+    private fun applyTextOverlay(
+        source: Bitmap,
+        overlay: TextOverlay,
+        crop: NormalizedRect,
+        frameWidth: Int,
+        frameHeight: Int
+    ): Bitmap {
+        if (overlay.text.isBlank()) return source
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = overlay.color.toArgb()
+            textSize = overlay.size * min(frameWidth, frameHeight)
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+        }
+        val x = (overlay.center.x - crop.left) * (source.width / crop.width)
+        val y = (overlay.center.y - crop.top) * (source.height / crop.height)
+        val metrics = paint.fontMetrics
+        canvas.drawText(overlay.text, x, y - (metrics.ascent + metrics.descent) / 2f, paint)
         return output
     }
 
