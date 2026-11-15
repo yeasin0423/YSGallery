@@ -10,6 +10,9 @@ import kotlin.math.sin
  * A text label painted on the photo. [center] lives in normalized coordinates of the rotated/flipped
  * frame and [size] is a fraction of that frame's shorter side, so the label follows rotation, mirroring
  * and cropping the same way the ink does.
+ *
+ * [id] keeps each label addressable while the list around it changes, so undo, selection and the
+ * selection box never chase a shifting list index.
  */
 data class TextOverlay(
     val text: String,
@@ -18,8 +21,15 @@ data class TextOverlay(
     /** Font size as a fraction of the frame's shorter side. */
     val size: Float,
     /** Clockwise rotation in degrees, drawn around [center]. */
-    val rotation: Float = 0f
+    val rotation: Float = 0f,
+    val id: Long = 0L
 )
+
+private var nextTextId = 0L
+
+/** Creates a label with a fresh [TextOverlay.id]; copies made with `copy` keep their id. */
+fun createTextOverlay(text: String, center: Offset, color: Color, size: Float): TextOverlay =
+    TextOverlay(text = text, center = center, color = color, size = size, id = ++nextTextId)
 
 /** The part of the text selection box a drag grabbed. */
 internal enum class TextHandle { None, Move, Resize, Rotate }
@@ -73,8 +83,10 @@ internal data class TextBox(
     }
 }
 
-const val MinTextSize = 0.03f
-const val MaxTextSize = 0.16f
+// The size slider is gone; dragging a corner covers the whole range. The bounds only stop a label
+// from collapsing to nothing or growing until its handles leave the screen.
+const val MinTextSize = 0.015f
+const val MaxTextSize = 1f
 const val DefaultTextSize = 0.07f
 
 fun TextOverlay.rotateClockwise() = copy(

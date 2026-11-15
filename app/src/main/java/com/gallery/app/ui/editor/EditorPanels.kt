@@ -29,6 +29,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -455,17 +456,19 @@ internal fun DrawPanel(
     }
 }
 
-/** Text label editor: the string itself, its colour and its size. */
+/**
+ * Text label editor: the string itself and its colour. Size is set by dragging a corner of the box on
+ * the photo, so there is no slider. [autoFocusKey] changes when a new box is created, which recreates
+ * the field and raises the keyboard for immediate typing.
+ */
 @Composable
 internal fun TextPanel(
     text: String,
     color: Color,
-    textSize: Float,
     enabled: Boolean,
+    autoFocusKey: Int,
     onTextChange: (String) -> Unit,
-    onSelectColor: (Color) -> Unit,
-    onSizeChange: (Float) -> Unit,
-    onSizeChangeFinished: () -> Unit
+    onSelectColor: (Color) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Column(
@@ -473,47 +476,22 @@ internal fun TextPanel(
             .fillMaxWidth()
             .padding(top = 10.dp, bottom = 12.dp)
     ) {
-        ThemedTextField(
-            value = text,
-            onValueChange = onTextChange,
-            placeholder = strings.textHint,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 22.dp, end = 22.dp, top = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = strings.textSize,
-                color = palette.onBackground,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "${(textSize * 100f).roundToInt()}%",
-                color = palette.textMuted,
-                fontSize = 13.sp
+        key(autoFocusKey) {
+            ThemedTextField(
+                value = text,
+                onValueChange = onTextChange,
+                placeholder = strings.textHint,
+                autoFocus = autoFocusKey > 0,
+                modifier = Modifier.padding(horizontal = 20.dp)
             )
         }
-        Slider(
-            value = textSize,
-            onValueChange = onSizeChange,
-            onValueChangeFinished = onSizeChangeFinished,
-            valueRange = MinTextSize..MaxTextSize,
-            enabled = enabled,
-            colors = SliderDefaults.colors(
-                thumbColor = palette.accent,
-                activeTrackColor = palette.accent,
-                inactiveTrackColor = palette.surfaceVariant,
-                activeTickColor = Color.Transparent,
-                inactiveTickColor = Color.Transparent
-            ),
-            modifier = Modifier.padding(horizontal = 14.dp)
+        Spacer(modifier = Modifier.height(10.dp))
+        DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
+        Text(
+            text = strings.textTapHint,
+            color = palette.textMuted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp)
         )
     }
 }

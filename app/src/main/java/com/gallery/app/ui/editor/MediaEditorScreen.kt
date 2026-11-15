@@ -139,7 +139,7 @@ private data class EditorSnapshot(
     val adjustments: EditorAdjustments,
     val filter: EditorFilter,
     val strokes: List<DrawStroke>,
-    val text: TextOverlay?
+    val texts: List<TextOverlay>
 )
 
 private const val MaxHistory = 60
@@ -215,7 +215,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var eraser by remember { mutableStateOf(false) }
     // Where the eraser finger is, so the white cursor circle can show the area it will clear.
     var eraserCursor by remember { mutableStateOf<Offset?>(null) }
-    var textOverlay by remember { mutableStateOf<TextOverlay?>(null) }
+    var textOverlays by remember { mutableStateOf<List<TextOverlay>>(emptyList()) }
+    var selectedTextId by remember { mutableStateOf<Long?>(null) }
+    // Set when a box is created blank; the first typed character turns it into one undo step.
+    var pendingTextCreate by remember { mutableStateOf<EditorSnapshot?>(null) }
+    // Bumped whenever a fresh box should raise the keyboard in the text panel.
+    var textFocusToken by remember { mutableIntStateOf(0) }
     var textColor by remember { mutableStateOf(Color.White) }
     var textSize by remember { mutableFloatStateOf(DefaultTextSize) }
     var saving by remember { mutableStateOf(false) }
@@ -238,7 +243,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var eraseGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGesture by remember { mutableStateOf<TextGesture?>(null) }
-    var textSizeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
 
     var openPanel by remember { mutableStateOf(EditorPanel.None) }
     // Kept after closing so the collapse animation still has content to draw.
@@ -263,7 +267,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     }
     val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
             !adjustments.isNeutral || filter.id != EditorFilterNone.id || strokes.isNotEmpty() ||
-            textOverlay != null
+            textOverlays.any { it.text.isNotBlank() }
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
     val canUndo = undoStack.isNotEmpty()
     val canRedo = redoStack.isNotEmpty()
@@ -277,7 +281,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = adjustments,
         filter = filter,
         strokes = strokes,
-        text = textOverlay
+        texts = textOverlays
     )
 
     /** Pushes [before] onto the undo stack and drops any redo branch. */
@@ -295,11 +299,14 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = state.adjustments
         filter = state.filter
         strokes = state.strokes
-        textOverlay = state.text
-        state.text?.let {
+        // Empty boxes only exist while being typed into; history keeps them out of the way.
+        textOverlays = state.texts.filter { it.text.isNotBlank() }
+        if (textOverlays.none { it.id == selectedTextId }) selectedTextId = null
+        textOverlays.firstOrNull { it.id == selectedTextId }?.let {
             textColor = it.color
             textSize = it.size
         }
+        pendingTextCreate = null
         activeStroke = null
         activePoints.clear()
         adjustGestureStart = null
@@ -308,7 +315,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         eraseGestureStart = null
         textGestureStart = null
         textGesture = null
-        textSizeGestureStart = null
         openPanel = EditorPanel.None
     }
 
@@ -381,7 +387,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             fitCrop(crop, locked)
         }
         strokes = strokes.map { if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise() }
-        textOverlay = textOverlay?.let { if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise() }
+        textOverlays = textOverlays.map {
+            if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise()
+        }
         scope.launch {
             // A positive angle runs clockwise, so the preview spins in from the opposite side.
             rotateAnimation.snapTo(if (clockwise) -90f else 90f)
@@ -395,7 +403,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (rotation % 180 == 0) flipHorizontal = !flipHorizontal else flipVertical = !flipVertical
         crop = crop.flipHorizontal()
         strokes = strokes.map { it.flipHorizontal() }
-        textOverlay = textOverlay?.flipHorizontal()
+        textOverlays = textOverlays.map { it.flipHorizontal() }
         scope.launch {
             flipXAnimation.snapTo(-1f)
             flipXAnimation.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 350f))
@@ -407,7 +415,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (rotation % 180 == 0) flipVertical = !flipVertical else flipHorizontal = !flipHorizontal
         crop = crop.flipVertical()
         strokes = strokes.map { it.flipVertical() }
-        textOverlay = textOverlay?.flipVertical()
+        textOverlays = textOverlays.map { it.flipVertical() }
         scope.launch {
             flipYAnimation.snapTo(-1f)
             flipYAnimation.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 350f))
@@ -426,7 +434,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         filter = EditorFilterNone
         strokes = emptyList()
         activeStroke = null
-        textOverlay = null
+        textOverlays = emptyList()
+        selectedTextId = null
+        pendingTextCreate = null
         eraser = false
         openPanel = EditorPanel.None
     }
@@ -527,12 +537,66 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         )
     }
 
-    /** Grabs a corner (resize), the floating knob (rotate) or the label itself (move). */
-    fun beginTextGesture(position: Offset, rect: Rect) {
-        val overlay = textOverlay?.takeIf { it.text.isNotBlank() } ?: return
+    /** The selected label, when its box is still in the list. */
+    fun selectedText(): TextOverlay? =
+        selectedTextId?.let { id -> textOverlays.firstOrNull { it.id == id } }
+
+    fun replaceText(id: Long, update: (TextOverlay) -> TextOverlay) {
+        textOverlays = textOverlays.map { if (it.id == id) update(it) else it }
+    }
+
+    /** The topmost label whose box or handle sits under [position]. */
+    fun textHitAt(position: Offset, rect: Rect): TextOverlay? {
+        val radius = with(density) { 22.dp.toPx() }
+        return textOverlays.lastOrNull {
+            textBoxOf(it, rect).hitTest(position, radius) != TextHandle.None
+        }
+    }
+
+    /** Drops the empty box a tap opened but the user never typed into. Not an undo step. */
+    fun discardBlankText() {
+        val selected = selectedText()
+        if (selected != null && selected.text.isBlank()) {
+            textOverlays = textOverlays.filterNot { it.id == selected.id }
+            selectedTextId = null
+        }
+        pendingTextCreate = null
+    }
+
+    fun selectText(overlay: TextOverlay) {
+        if (selectedTextId == overlay.id) return
+        discardBlankText()
+        selectedTextId = overlay.id
+    }
+
+    /** Adds an empty box at [center] (normalized) and focuses the field so typing fills it in. */
+    fun createText(center: Offset, focus: Boolean = true) {
+        discardBlankText()
+        pendingTextCreate = snapshot()
+        val overlay = createTextOverlay("", center, textColor, DefaultTextSize)
+        textOverlays = textOverlays + overlay
+        selectedTextId = overlay.id
+        textSize = DefaultTextSize
+        // A tap on the photo should raise the keyboard; typing into an empty panel already has it.
+        if (focus) textFocusToken += 1
+    }
+
+    fun createTextAt(position: Offset, rect: Rect) {
+        createText(normalizedPoint(position, rect))
+    }
+
+    /**
+     * Grabs a box's corner (resize), floating knob (rotate) or body (move), and selects it first so the
+     * panel edits the label the finger touched.
+     */
+    fun beginTextGesture(position: Offset, rect: Rect): Boolean {
+        val overlay = textHitAt(position, rect) ?: return false
+        selectText(overlay)
         val box = textBoxOf(overlay, rect)
-        val handle = box.hitTest(position, touchRadius = with(density) { 22.dp.toPx() })
-        if (handle == TextHandle.None) return
+        val handle = box.hitTest(position, with(density) { 22.dp.toPx() })
+        if (handle == TextHandle.None) return false
+        // Any change other than typing makes the pre-creation snapshot stale.
+        pendingTextCreate = null
         val fromCenter = position - box.center
         textGesture = TextGesture(
             handle = handle,
@@ -544,22 +608,25 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             startDistance = max(fromCenter.getDistance(), 1f)
         )
         textGestureStart = snapshot()
+        return true
     }
 
     /** Applies an in-progress text drag; one undo step is recorded when it ends. */
     fun updateTextGesture(position: Offset, rect: Rect) {
         val gesture = textGesture ?: return
-        val overlay = textOverlay ?: return
+        val overlay = selectedText() ?: return
         when (gesture.handle) {
             TextHandle.Move -> {
                 val dx = (position.x - gesture.start.x) / rect.width
                 val dy = (position.y - gesture.start.y) / rect.height
-                textOverlay = overlay.copy(
-                    center = Offset(
-                        (gesture.center.x + dx).coerceIn(0f, 1f),
-                        (gesture.center.y + dy).coerceIn(0f, 1f)
+                replaceText(overlay.id) {
+                    it.copy(
+                        center = Offset(
+                            (gesture.center.x + dx).coerceIn(0f, 1f),
+                            (gesture.center.y + dy).coerceIn(0f, 1f)
+                        )
                     )
-                )
+                }
             }
 
             TextHandle.Rotate -> {
@@ -576,7 +643,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 while (delta < -180f) delta += 360f
                 var rotation = (gesture.rotation + delta) % 360f
                 if (rotation < 0f) rotation += 360f
-                textOverlay = overlay.copy(rotation = rotation)
+                replaceText(overlay.id) { it.copy(rotation = rotation) }
             }
 
             TextHandle.Resize -> {
@@ -588,8 +655,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 val size = (gesture.size * (distance / gesture.startDistance))
                     .coerceIn(MinTextSize, MaxTextSize)
                 if (size != overlay.size) {
+                    // New boxes inherit the last size the user dragged to.
                     textSize = size
-                    textOverlay = overlay.copy(size = size)
+                    replaceText(overlay.id) { it.copy(size = size) }
                 }
             }
 
@@ -603,49 +671,50 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         textGesture = null
     }
 
-    /** Typing the first character of a label is the undo boundary; later keystrokes refine it. */
+    /**
+     * Edits the selected label, or creates a centred one when nothing is selected. Typing before a new
+     * box's first character counts as one step, so undo removes the box whole; clearing all text is its
+     * own step.
+     */
     fun changeText(value: String) {
         val cleaned = value.replace('\n', ' ')
-        val existing = textOverlay
+        val existing = selectedText() ?: run {
+            if (cleaned.isBlank()) return
+            createText(Offset(0.5f, 0.5f), focus = false)
+            selectedText()
+        } ?: return
         if (cleaned.isBlank()) {
-            if (existing != null) {
-                pushHistory()
-                textOverlay = null
-            }
+            if (existing.text.isBlank()) return
+            pushHistory()
+            replaceText(existing.id) { it.copy(text = "") }
             return
         }
-        if (existing == null) pushHistory()
-        // Keep a restored overlay's own colour and size; the panel state only seeds a new one.
-        textOverlay = (existing ?: TextOverlay(cleaned, Offset(0.5f, 0.5f), textColor, textSize))
-            .copy(text = cleaned)
+        if (existing.text.isBlank()) {
+            pushHistory(pendingTextCreate ?: snapshot())
+            pendingTextCreate = null
+        }
+        replaceText(existing.id) { it.copy(text = cleaned) }
     }
 
     fun chooseTextColor(color: Color) {
         textColor = color
-        val overlay = textOverlay ?: return
-        if (overlay.color != color) {
+        val overlay = selectedText() ?: return
+        if (overlay.color == color) return
+        // A colour chosen before typing still belongs to the new box, so keep creation as the boundary.
+        if (overlay.text.isBlank() && pendingTextCreate != null) {
+            pushHistory(pendingTextCreate!!)
+            pendingTextCreate = null
+        } else {
             pushHistory()
-            textOverlay = overlay.copy(color = color)
         }
-    }
-
-    fun changeTextSize(size: Float) {
-        textSize = size
-        val overlay = textOverlay ?: return
-        if (textSizeGestureStart == null) textSizeGestureStart = snapshot()
-        textOverlay = overlay.copy(size = size)
-    }
-
-    fun finishTextSize() {
-        textSizeGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
-        textSizeGestureStart = null
+        replaceText(overlay.id) { it.copy(color = color) }
     }
 
     fun saveCopy() {
         if (saving || !changed) return
         saving = true
         progress = 0f
-        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlay)
+        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlays)
         scope.launch {
             if (item.isVideo) {
                 runCatching { MediaEditor.saveVideo(context, item, spec) { progress = it } }
@@ -676,7 +745,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (saving || !changed || !canOverwrite) return
         saving = true
         progress = 0f
-        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlay)
+        val spec = EditSpec(rotation, flipHorizontal, flipVertical, crop, colorMatrix, strokes, textOverlays)
         scope.launch {
             runCatching { MediaEditor.saveImage(context, item, spec, overwrite = true) }
                 .onSuccess { result ->
@@ -703,7 +772,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (saving) return@BackHandler
         when {
             openPanel != EditorPanel.None -> openPanel = EditorPanel.None
-            tab != EditorTab.Crop -> tab = EditorTab.Crop
+            tab != EditorTab.Crop -> {
+                if (tab == EditorTab.Text) {
+                    discardBlankText()
+                    selectedTextId = null
+                }
+                tab = EditorTab.Crop
+            }
             else -> onClose()
         }
     }
@@ -802,17 +877,29 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                 return@pointerInput
                             }
                             if (tab == EditorTab.Text) {
-                                // Grab the handle from the exact touch-down point, then follow the finger
-                                // without slop so the box tracks it one-to-one.
+                                // Tap a box to grab it (move, resize, rotate); tap empty canvas to
+                                // start another label there. The down point is used directly so small
+                                // handles are easy to catch.
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
-                                    beginTextGesture(down.position, imageRect)
-                                    if (textGesture == null) return@awaitEachGesture
-                                    drag(down.id) { change ->
-                                        change.consume()
-                                        updateTextGesture(change.position, imageRect)
+                                    if (beginTextGesture(down.position, imageRect)) {
+                                        drag(down.id) { change ->
+                                            change.consume()
+                                            updateTextGesture(change.position, imageRect)
+                                        }
+                                        finishTextGesture()
+                                    } else {
+                                        // A pan over empty canvas does nothing; only a tap adds a box.
+                                        var moved = false
+                                        val tapSlop = 18.dp.toPx()
+                                        drag(down.id) { change ->
+                                            change.consume()
+                                            if ((change.position - down.position).getDistance() > tapSlop) {
+                                                moved = true
+                                            }
+                                        }
+                                        if (!moved) createTextAt(down.position, imageRect)
                                     }
-                                    finishTextGesture()
                                 }
                                 return@pointerInput
                             }
@@ -885,7 +972,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             )
                         }
                         // Text sits on top of the ink, exactly like the exporter paints it.
-                        textOverlay?.takeIf { it.text.isNotBlank() }?.let { overlay ->
+                        textOverlays.forEach { overlay ->
+                            if (overlay.text.isBlank()) return@forEach
                             textPaint.color = overlay.color.toArgb()
                             textPaint.textSize = overlay.size * frameMin
                             val centerX = imageRect.left + overlay.center.x * imageRect.width
@@ -907,7 +995,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     }
                     // The selection box sits above the clip so an off-crop label can still be grabbed.
                     if (tab == EditorTab.Text) {
-                        textOverlay?.takeIf { it.text.isNotBlank() }?.let { overlay ->
+                        textOverlays.firstOrNull { it.id == selectedTextId }?.let { overlay ->
                             val box = textBoxOf(overlay, imageRect)
                             val accent = palette.accent
                             val cornerRadius = 6.dp.toPx()
@@ -1132,14 +1220,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 )
 
                 EditorTab.Text -> TextPanel(
-                    text = textOverlay?.text.orEmpty(),
-                    color = textOverlay?.color ?: textColor,
-                    textSize = textOverlay?.size ?: textSize,
+                    text = selectedText()?.text.orEmpty(),
+                    color = selectedText()?.color ?: textColor,
                     enabled = !saving && preview != null,
+                    autoFocusKey = textFocusToken,
                     onTextChange = ::changeText,
-                    onSelectColor = ::chooseTextColor,
-                    onSizeChange = ::changeTextSize,
-                    onSizeChangeFinished = ::finishTextSize
+                    onSelectColor = ::chooseTextColor
                 )
             }
 
@@ -1148,6 +1234,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 selected = tab,
                 enabled = !saving,
                 onSelect = { selected ->
+                    if (tab == EditorTab.Text && selected != EditorTab.Text) {
+                        discardBlankText()
+                        selectedTextId = null
+                    }
                     tab = selected
                     openPanel = EditorPanel.None
                     adjustGestureStart = null
@@ -1156,7 +1246,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     eraseGestureStart = null
                     textGestureStart = null
                     textGesture = null
-                    textSizeGestureStart = null
                     eraserCursor = null
                 }
             )

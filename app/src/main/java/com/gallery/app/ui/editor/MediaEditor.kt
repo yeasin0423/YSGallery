@@ -74,7 +74,7 @@ data class NormalizedRect(val left: Float, val top: Float, val right: Float, val
 /**
  * An edit: mirror first ([flipHorizontal]/[flipVertical] on the source frame), then rotate clockwise by
  * [rotation] degrees, then crop to [crop] (expressed in the resulting frame), then apply [colorMatrix]
- * (the combined adjustments and filter), then paint [drawStrokes] and [textOverlay] on top.
+ * (the combined adjustments and filter), then paint [drawStrokes] and [textOverlays] on top.
  */
 data class EditSpec(
     val rotation: Int,
@@ -83,7 +83,7 @@ data class EditSpec(
     val crop: NormalizedRect,
     val colorMatrix: FloatArray? = null,
     val drawStrokes: List<DrawStroke> = emptyList(),
-    val textOverlay: TextOverlay? = null
+    val textOverlays: List<TextOverlay> = emptyList()
 )
 
 /** Result of saving an edited image. */
@@ -268,10 +268,13 @@ object MediaEditor {
         } else {
             applyDrawStrokes(colored, spec.drawStrokes, crop, transformed.width, transformed.height)
         }
-        // The label sits above the ink, matching the order the preview draws them in.
-        val result = spec.textOverlay?.let {
-            applyTextOverlay(inked, it, crop, transformed.width, transformed.height)
-        } ?: inked
+        // Labels sit above the ink, in the same order the preview draws them.
+        val labelBitmaps = mutableListOf<Bitmap>()
+        var result = inked
+        spec.textOverlays.filter { it.text.isNotBlank() }.forEach { overlay ->
+            result = applyTextOverlay(result, overlay, crop, transformed.width, transformed.height)
+            labelBitmaps += result
+        }
 
         val (format, extension, mimeType) = outputFormat(item, overwrite)
         val file = File(context.cacheDir, "edit_${System.currentTimeMillis()}.$extension")
@@ -287,7 +290,7 @@ object MediaEditor {
             file.delete()
             throw e
         } finally {
-            if (result !== inked) result.recycle()
+            labelBitmaps.forEach { it.recycle() }
             if (inked !== colored) inked.recycle()
             if (colored !== cropped) colored.recycle()
             if (cropped !== transformed) cropped.recycle()
