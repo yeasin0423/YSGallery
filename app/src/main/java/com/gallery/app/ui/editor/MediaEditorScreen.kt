@@ -234,6 +234,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var filter by remember { mutableStateOf(EditorFilterNone) }
     var drawColor by remember { mutableStateOf(EditorDrawColors.first()) }
     var drawWidth by remember { mutableFloatStateOf(DefaultDrawWidth) }
+    // Every width-slider move bumps this, so a ring shows the real brush/eraser size over the photo.
+    var sizePreviewToken by remember { mutableIntStateOf(0) }
+    var showSizePreview by remember { mutableStateOf(false) }
     var strokes by remember { mutableStateOf<List<DrawStroke>>(emptyList()) }
     var activeStroke by remember { mutableStateOf<DrawStroke?>(null) }
     // Live points of the stroke under the finger; a snapshot list keeps long strokes cheap to extend.
@@ -309,6 +312,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     val colorMatrix = remember(adjustments, filter) { editorColorMatrix(adjustments, filter) }
     val previewColorFilter = remember(colorMatrix) {
         ColorFilter.colorMatrix(ColorMatrix(values = colorMatrix))
+    }
+    // The size ring stays up for a moment after the slider is released so the final width is readable.
+    LaunchedEffect(sizePreviewToken) {
+        if (sizePreviewToken == 0) return@LaunchedEffect
+        showSizePreview = true
+        delay(1100)
+        showSizePreview = false
     }
     // The blur tool shows a softened copy of the frame under its mask. It is rebuilt only when the
     // frame changes or the tool becomes active, never on every stroke; it stays tiny, so letting the
@@ -511,6 +521,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         pendingTextCreate = null
         drawMode = DrawMode.Brush
         blurShape = BlurShape.Stroke
+        showSizePreview = false
         previewScale = 1f
         previewOffset = Offset.Zero
         openPanel = EditorPanel.None
@@ -1522,6 +1533,30 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             )
                         }
                     }
+                    // While the width slider moves, show the exact brush or eraser footprint in the
+                    // middle of the visible photo; it lingers a moment after release.
+                    if (tab == EditorTab.Draw && showSizePreview &&
+                        (drawMode == DrawMode.Brush || drawMode == DrawMode.Eraser)
+                    ) {
+                        val radius = (drawWidth * frameMin / 2f).coerceAtLeast(4.dp.toPx())
+                        val visible = imageRect.intersect(Rect(Offset.Zero, size))
+                        if (!visible.isEmpty) {
+                            val center = visible.center
+                            drawCircle(Color.White.copy(alpha = 0.10f), radius, center)
+                            drawCircle(
+                                color = Color.Black.copy(alpha = 0.30f),
+                                radius = radius + 1.5.dp.toPx(),
+                                center = center,
+                                style = Stroke(3.dp.toPx())
+                            )
+                            drawCircle(
+                                color = Color.White,
+                                radius = radius,
+                                center = center,
+                                style = Stroke(1.5.dp.toPx())
+                            )
+                        }
+                    }
                 }
 
                 // A transparent field owns the IME while the label is typed; the glyphs and the caret
@@ -1643,7 +1678,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         drawColor = it
                         if (drawMode == DrawMode.Eraser) drawMode = DrawMode.Brush
                     },
-                    onBrushWidthChange = { drawWidth = it },
+                    onBrushWidthChange = {
+                        drawWidth = it
+                        sizePreviewToken += 1
+                    },
                     onModeChange = { mode ->
                         drawMode = mode
                         toolCursor = null

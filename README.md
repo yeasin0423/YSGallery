@@ -17,7 +17,7 @@ Gallery is made for:
   and SD card
 - Favorites and trash
 - Deep zoom, readable even on huge photos and very long scroll screenshots
-- Editor: crop, rotate and mirror photos and videos (saved as a copy)
+- Editor: crop, rotate and mirror photos, with adjust, filters, freehand drawing, a blur brush and text labels; saves as a copy (or overwrites the original after confirmation)
 - Storage overview for internal storage and SD card
 - Open photos and videos from other apps ("Open with")
 - English
