@@ -1020,6 +1020,32 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 onOptionsBounds = { saveMenuAnchor = it }
             )
 
+            // The before/after control sits above the photo, centred, so it never covers the image.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CompareButton(
+                    enabled = !saving && preview != null,
+                    comparisonOpen = compareOpen,
+                    onToggle = {
+                        if (compareOpen) {
+                            compareOpen = false
+                        } else {
+                            cancelToolGesture()
+                            compareSplit = 0.5f
+                            compareOpen = true
+                        }
+                    },
+                    onPeekChange = { peeking ->
+                        if (peeking) cancelToolGesture()
+                        peekOriginal = peeking
+                    }
+                )
+            }
+
             // Preview with the crop frame drawn on top.
             BoxWithConstraints(
                 modifier = Modifier
@@ -1569,10 +1595,11 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             )
                         }
                     }
-                    // While the width slider moves, show the exact brush or eraser footprint in the
-                    // middle of the visible photo; it lingers a moment after release.
+                    // While the width slider moves, show the exact brush, eraser or blur footprint
+                    // in the middle of the visible photo; it lingers a moment after release.
                     if (tab == EditorTab.Draw && showSizePreview &&
-                        (drawMode == DrawMode.Brush || drawMode == DrawMode.Eraser) &&
+                        (drawMode == DrawMode.Brush || drawMode == DrawMode.Eraser ||
+                            drawMode == DrawMode.Blur) &&
                         !compareOpen && !peekOriginal
                     ) {
                         val radius = (drawWidth * frameMin / 2f).coerceAtLeast(4.dp.toPx())
@@ -1692,27 +1719,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         }
                     }
                 }
-
-                CompareButton(
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 2.dp),
-                    enabled = !saving && preview != null,
-                    comparisonOpen = compareOpen,
-                    onToggle = {
-                        if (compareOpen) {
-                            compareOpen = false
-                        } else {
-                            cancelToolGesture()
-                            compareSplit = 0.5f
-                            compareOpen = true
-                        }
-                    },
-                    onPeekChange = { peeking ->
-                        if (peeking) cancelToolGesture()
-                        peekOriginal = peeking
-                    }
-                )
 
                 // A transparent field owns the IME while the label is typed; the glyphs and the caret
                 // are painted on the canvas above, so the box itself stays fully draggable.
