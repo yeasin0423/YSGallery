@@ -39,6 +39,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -541,14 +543,16 @@ internal fun DrawPanel(
 }
 
 /**
- * Text label editor: the colour only. Typing happens inside the box on the photo, and size is set by
- * dragging a corner there, so the panel is just the palette and a short hint.
+ * Text label editor: the colour palette and the font styles. Typing happens in the floating bar at
+ * the bottom, and size is set by dragging a corner on the photo.
  */
 @Composable
 internal fun TextPanel(
     color: Color,
+    font: TextFont,
     enabled: Boolean,
-    onSelectColor: (Color) -> Unit
+    onSelectColor: (Color) -> Unit,
+    onSelectFont: (TextFont) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Column(
@@ -557,6 +561,23 @@ internal fun TextPanel(
             .padding(top = 10.dp, bottom = 12.dp)
     ) {
         DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextFont.entries.forEach { option ->
+                FontChip(
+                    font = option,
+                    selected = option == font,
+                    enabled = enabled,
+                    onClick = { onSelectFont(option) }
+                )
+            }
+        }
         Text(
             text = strings.textTapHint,
             color = palette.textMuted,
@@ -565,3 +586,126 @@ internal fun TextPanel(
         )
     }
 }
+
+/** One font choice, drawn in the style it applies so the row reads like a type sample. */
+@Composable
+private fun FontChip(
+    font: TextFont,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    val family = when (font) {
+        TextFont.Serif -> FontFamily.Serif
+        TextFont.Handwritten -> FontFamily.Cursive
+        else -> FontFamily.SansSerif
+    }
+    val weight = when (font) {
+        TextFont.Bold, TextFont.BoldItalic -> FontWeight.Bold
+        else -> FontWeight.Normal
+    }
+    val style = when (font) {
+        TextFont.Italic, TextFont.BoldItalic -> FontStyle.Italic
+        else -> FontStyle.Normal
+    }
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (selected) palette.accent else palette.surfaceVariant)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 7.dp)
+    ) {
+        Text(
+            text = fontLabel(font),
+            color = if (selected) palette.onAccent else palette.onBackground,
+            fontFamily = family,
+            fontWeight = weight,
+            fontStyle = style,
+            fontSize = 13.sp
+        )
+    }
+}
+
+private fun fontLabel(font: TextFont): String = when (font) {
+    TextFont.Bold -> strings.fontBold
+    TextFont.Regular -> strings.fontRegular
+    TextFont.Serif -> strings.fontSerif
+    TextFont.Handwritten -> strings.fontHandwritten
+    TextFont.Italic -> strings.fontItalic
+    TextFont.BoldItalic -> strings.fontBoldItalic
+}
+
+/** Freehand drawing: brush, eraser, blur or mosaic, plus colours and a brush-size slider. */
+@Composable
+internal fun DrawPanel(
+    color: Color,
+    brushWidth: Float,
+    mode: DrawMode,
+    blurShape: BlurShape,
+    enabled: Boolean,
+    onSelectColor: (Color) -> Unit,
+    onBrushWidthChange: (Float) -> Unit,
+    onModeChange: (DrawMode) -> Unit,
+    onBlurShapeChange: (BlurShape) -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 12.dp)
+    ) {
+        DrawModeToggle(mode = mode, enabled = enabled, onModeChange = onModeChange)
+        if (mode == DrawMode.Blur || mode == DrawMode.Mosaic) {
+            BlurShapeToggle(
+                shape = blurShape,
+                enabled = enabled,
+                onShapeChange = onBlurShapeChange
+            )
+        }
+        if (mode == DrawMode.Brush) {
+            Spacer(modifier = Modifier.height(8.dp))
+            DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
+        }
+        // Every tool shares the width slider now, so the eraser can be as wide as the brush.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 22.dp, end = 22.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = strings.brushSize,
+                color = palette.onBackground,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            // A dot that shows the current brush thickness.
+            Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size((brushWidth / MaxDrawWidth * 18f).coerceIn(4f, 18f).dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .border(1.dp, palette.onBackground.copy(alpha = 0.2f), CircleShape)
+                )
+            }
+        }
+        Slider(
+            value = brushWidth,
+            onValueChange = onBrushWidthChange,
+            valueRange = MinDrawWidth..MaxDrawWidth,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = palette.accent,
+                activeTrackColor = palette.accent,
+                inactiveTrackColor = palette.surfaceVariant,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent
+            ),
+            modifier = Modifier.padding(horizontal = 14.dp)
+        )
+    }
+}
+

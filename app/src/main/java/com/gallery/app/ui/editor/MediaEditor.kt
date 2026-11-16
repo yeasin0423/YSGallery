@@ -15,7 +15,6 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
-import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -489,7 +488,7 @@ object MediaEditor {
             color = overlay.color.toArgb()
             textSize = overlay.size * min(frameWidth, frameHeight)
             textAlign = Paint.Align.CENTER
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = overlay.font.typeface()
         }
         val x = (overlay.center.x - crop.left) * (source.width / crop.width)
         val y = (overlay.center.y - crop.top) * (source.height / crop.height)

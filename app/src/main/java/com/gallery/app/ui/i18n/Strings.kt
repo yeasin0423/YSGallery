@@ -74,6 +74,12 @@ interface AppStrings {
     val brush: String
     val text: String
     val textTapHint: String
+    val fontBold: String
+    val fontRegular: String
+    val fontSerif: String
+    val fontHandwritten: String
+    val fontItalic: String
+    val fontBoldItalic: String
     val brushSize: String
     val undo: String
     val redo: String
@@ -413,6 +419,12 @@ object EnglishStrings : AppStrings {
     override val brush = "Brush"
     override val text = "Text"
     override val textTapHint = "Tap the photo to add a box and type in it. Drag a corner to resize, the knob to rotate, the × to remove."
+    override val fontBold = "Bold"
+    override val fontRegular = "Regular"
+    override val fontSerif = "Serif"
+    override val fontHandwritten = "Handwritten"
+    override val fontItalic = "Italic"
+    override val fontBoldItalic = "Bold italic"
     override val brushSize = "Brush size"
     override val undo = "Undo"
     override val redo = "Redo"

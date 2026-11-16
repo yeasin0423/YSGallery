@@ -92,6 +92,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -264,6 +265,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var textFocusToken by remember { mutableIntStateOf(0) }
     var textColor by remember { mutableStateOf(Color.White) }
     var textSize by remember { mutableFloatStateOf(DefaultTextSize) }
+    var textFont by remember { mutableStateOf(TextFont.Bold) }
     var saving by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
 
@@ -402,6 +404,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         textOverlays.firstOrNull { it.id == selectedTextId }?.let {
             textColor = it.color
             textSize = it.size
+            textFont = it.font
         }
         pendingTextCreate = null
         activeStroke = null
@@ -697,6 +700,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
      */
     fun textBoxOf(overlay: TextOverlay, rect: Rect): TextBox {
         val frameMin = min(rect.width, rect.height)
+        textPaint.typeface = overlay.font.typeface()
         textPaint.textSize = overlay.size * frameMin
         val metrics = textPaint.fontMetrics
         val padX = with(density) { 10.dp.toPx() }
@@ -753,7 +757,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     fun createText(center: Offset, focus: Boolean = true) {
         discardBlankText()
         pendingTextCreate = snapshot()
-        val overlay = createTextOverlay("", center, textColor, DefaultTextSize)
+        val overlay = createTextOverlay("", center, textColor, DefaultTextSize, textFont)
         textOverlays = textOverlays + overlay
         selectedTextId = overlay.id
         textSize = DefaultTextSize
@@ -923,6 +927,20 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             pushHistory()
         }
         replaceText(overlay.id) { it.copy(color = color) }
+    }
+
+    /** Applies a font style to the selected label, or remembers it for the next one. */
+    fun chooseTextFont(font: TextFont) {
+        textFont = font
+        val overlay = selectedText() ?: return
+        if (overlay.font == font) return
+        if (overlay.text.isBlank() && pendingTextCreate != null) {
+            pushHistory(pendingTextCreate!!)
+            pendingTextCreate = null
+        } else {
+            pushHistory()
+        }
+        replaceText(overlay.id) { it.copy(font = font) }
     }
 
     fun saveCopy() {
@@ -1469,6 +1487,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         textOverlays.forEach { overlay ->
                             if (overlay.text.isBlank()) return@forEach
                             textPaint.color = overlay.color.toArgb()
+                            textPaint.typeface = overlay.font.typeface()
                             textPaint.textSize = overlay.size * frameMin
                             val centerX = imageRect.left + overlay.center.x * imageRect.width
                             val centerY = imageRect.top + overlay.center.y * imageRect.height
@@ -1492,91 +1511,122 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         textOverlays.firstOrNull { it.id == selectedTextId }?.let { overlay ->
                             val box = textBoxOf(overlay, imageRect)
                             val accent = palette.accent
-                            val cornerRadius = 6.dp.toPx()
+                            // A rounded, softly filled frame with rounded-square handles reads calmer
+                            // than the old sharp rectangle with round dots.
+                            val radius = 10.dp.toPx()
+                            val edge = 1.25.dp.toPx()
+                            val boxTopLeft = Offset(
+                                box.center.x - box.halfWidth,
+                                box.center.y - box.halfHeight
+                            )
+                            val boxSize = Size(box.halfWidth * 2f, box.halfHeight * 2f)
                             rotate(degrees = overlay.rotation, pivot = box.center) {
-                                drawRect(
-                                    color = accent.copy(alpha = 0.10f),
-                                    topLeft = Offset(
-                                        box.center.x - box.halfWidth,
-                                        box.center.y - box.halfHeight
-                                    ),
-                                    size = Size(box.halfWidth * 2f, box.halfHeight * 2f)
+                                drawRoundRect(
+                                    color = accent.copy(alpha = 0.08f),
+                                    topLeft = boxTopLeft,
+                                    size = boxSize,
+                                    cornerRadius = CornerRadius(radius)
                                 )
-                                drawRect(
-                                    color = accent,
-                                    topLeft = Offset(
-                                        box.center.x - box.halfWidth,
-                                        box.center.y - box.halfHeight
-                                    ),
-                                    size = Size(box.halfWidth * 2f, box.halfHeight * 2f),
-                                    style = Stroke(1.5.dp.toPx())
+                                drawRoundRect(
+                                    color = accent.copy(alpha = 0.9f),
+                                    topLeft = boxTopLeft,
+                                    size = boxSize,
+                                    cornerRadius = CornerRadius(radius),
+                                    style = Stroke(edge)
                                 )
                                 val knob = Offset(box.center.x, box.center.y - box.halfHeight)
                                 drawLine(
-                                    color = accent,
+                                    color = accent.copy(alpha = 0.55f),
                                     start = knob,
                                     end = Offset(knob.x, knob.y - box.handleGap),
-                                    strokeWidth = 1.5.dp.toPx()
+                                    strokeWidth = edge
                                 )
                                 // White fill keeps the handles visible on bright photos.
+                                val handleSize = 11.dp.toPx()
+                                val handleRadius = CornerRadius(handleSize * 0.38f)
                                 listOf(
                                     Offset(box.center.x - box.halfWidth, box.center.y - box.halfHeight),
                                     Offset(box.center.x + box.halfWidth, box.center.y - box.halfHeight),
                                     Offset(box.center.x - box.halfWidth, box.center.y + box.halfHeight),
                                     Offset(box.center.x + box.halfWidth, box.center.y + box.halfHeight)
                                 ).forEach { corner ->
-                                    drawCircle(Color.White, cornerRadius, corner)
-                                    drawCircle(accent, cornerRadius, corner, style = Stroke(2.dp.toPx()))
+                                    val topLeft = Offset(
+                                        corner.x - handleSize / 2f,
+                                        corner.y - handleSize / 2f
+                                    )
+                                    val size = Size(handleSize, handleSize)
+                                    drawRoundRect(Color.White, topLeft, size, handleRadius)
+                                    drawRoundRect(
+                                        color = accent,
+                                        topLeft = topLeft,
+                                        size = size,
+                                        cornerRadius = handleRadius,
+                                        style = Stroke(1.5.dp.toPx())
+                                    )
                                 }
-                                val rotateKnob = Offset(knob.x, knob.y - box.handleGap)
-                                drawCircle(Color.White, cornerRadius + 1.dp.toPx(), rotateKnob)
-                                drawCircle(
-                                    accent,
-                                    cornerRadius + 1.dp.toPx(),
-                                    rotateKnob,
-                                    style = Stroke(2.dp.toPx())
+                                // A small pill at the top turns the label; its arc hints at rotation.
+                                val knobCenter = Offset(knob.x, knob.y - box.handleGap)
+                                val pillWidth = 24.dp.toPx()
+                                val pillHeight = 15.dp.toPx()
+                                val pillTopLeft = Offset(
+                                    knobCenter.x - pillWidth / 2f,
+                                    knobCenter.y - pillHeight / 2f
                                 )
-                                // A small arc hints that this knob turns the label.
+                                val pillSize = Size(pillWidth, pillHeight)
+                                val pillRadius = CornerRadius(pillHeight / 2f)
+                                drawRoundRect(Color.White, pillTopLeft, pillSize, pillRadius)
+                                drawRoundRect(
+                                    color = accent.copy(alpha = 0.9f),
+                                    topLeft = pillTopLeft,
+                                    size = pillSize,
+                                    cornerRadius = pillRadius,
+                                    style = Stroke(edge)
+                                )
+                                val arcSize = 8.dp.toPx()
                                 drawArc(
                                     color = accent,
-                                    startAngle = 200f,
-                                    sweepAngle = 140f,
+                                    startAngle = 150f,
+                                    sweepAngle = 240f,
                                     useCenter = false,
                                     topLeft = Offset(
-                                        rotateKnob.x - cornerRadius / 2f,
-                                        rotateKnob.y - cornerRadius / 2f
+                                        knobCenter.x - arcSize / 2f,
+                                        knobCenter.y - arcSize / 2f
                                     ),
-                                    size = Size(cornerRadius, cornerRadius),
-                                    style = Stroke(1.5.dp.toPx())
+                                    size = Size(arcSize, arcSize),
+                                    style = Stroke(1.6.dp.toPx())
                                 )
-                                // The cross removes this box outright; it is hit-tested before the
-                                // corners so it never gets swallowed by the resize target. Coordinates
-                                // stay unrotated here because the whole block is already inside the
-                                // label's rotation.
+                                // The remove cross sits just outside the top-left corner and is
+                                // hit-tested before the corners, so it never gets swallowed.
                                 val gap = box.handleGap * 0.8f
                                 val delete = Offset(
                                     box.center.x - box.halfWidth - gap,
                                     box.center.y - box.halfHeight - gap
                                 )
-                                val deleteRadius = cornerRadius
+                                val deleteRadius = 10.dp.toPx()
                                 drawCircle(Color.White, deleteRadius, delete)
-                                drawCircle(accent, deleteRadius, delete, style = Stroke(2.dp.toPx()))
-                                val arm = deleteRadius * 0.5f
+                                drawCircle(
+                                    accent.copy(alpha = 0.9f),
+                                    deleteRadius,
+                                    delete,
+                                    style = Stroke(edge)
+                                )
+                                val arm = deleteRadius * 0.42f
                                 drawLine(
                                     color = accent,
                                     start = Offset(delete.x - arm, delete.y - arm),
                                     end = Offset(delete.x + arm, delete.y + arm),
-                                    strokeWidth = 1.8.dp.toPx()
+                                    strokeWidth = 1.6.dp.toPx()
                                 )
                                 drawLine(
                                     color = accent,
                                     start = Offset(delete.x - arm, delete.y + arm),
                                     end = Offset(delete.x + arm, delete.y - arm),
-                                    strokeWidth = 1.8.dp.toPx()
+                                    strokeWidth = 1.6.dp.toPx()
                                 )
                                 // The caret blinks at the end of the text while typing, so the user sees
                                 // where the characters land without any field on the panel.
                                 if (textEditorFocused) {
+                                    textPaint.typeface = overlay.font.typeface()
                                     textPaint.textSize = overlay.size * frameMin
                                     val endX = box.center.x + textPaint.measureText(overlay.text) / 2f +
                                             2.dp.toPx()
@@ -1925,8 +1975,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
 
                 EditorTab.Text -> TextPanel(
                     color = selectedText()?.color ?: textColor,
+                    font = selectedText()?.font ?: textFont,
                     enabled = !saving && preview != null,
-                    onSelectColor = ::chooseTextColor
+                    onSelectColor = ::chooseTextColor,
+                    onSelectFont = ::chooseTextFont
                 )
             }
 

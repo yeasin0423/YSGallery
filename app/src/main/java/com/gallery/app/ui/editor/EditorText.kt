@@ -1,5 +1,6 @@
 package com.gallery.app.ui.editor
 
+import android.graphics.Typeface
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import kotlin.math.abs
@@ -22,14 +23,42 @@ data class TextOverlay(
     val size: Float,
     /** Clockwise rotation in degrees, drawn around [center]. */
     val rotation: Float = 0f,
+    val font: TextFont = TextFont.Bold,
     val id: Long = 0L
 )
+
+/** The typefaces the text panel offers. Bold is the default, as labels were always drawn bold. */
+enum class TextFont { Bold, Regular, Serif, Handwritten, Italic, BoldItalic }
+
+/** The Android typeface for a label style; the preview and the export both use this one mapping. */
+fun TextFont.typeface(): Typeface = when (this) {
+    TextFont.Bold -> Typeface.DEFAULT_BOLD
+    TextFont.Regular -> Typeface.DEFAULT
+    TextFont.Serif -> Typeface.SERIF
+    // "cursive" resolves to the device's handwriting face on every Android version.
+    TextFont.Handwritten -> Typeface.create("cursive", Typeface.NORMAL)
+    TextFont.Italic -> Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+    TextFont.BoldItalic -> Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
+}
 
 private var nextTextId = 0L
 
 /** Creates a label with a fresh [TextOverlay.id]; copies made with `copy` keep their id. */
-fun createTextOverlay(text: String, center: Offset, color: Color, size: Float): TextOverlay =
-    TextOverlay(text = text, center = center, color = color, size = size, id = ++nextTextId)
+fun createTextOverlay(
+    text: String,
+    center: Offset,
+    color: Color,
+    size: Float,
+    font: TextFont = TextFont.Bold
+): TextOverlay =
+    TextOverlay(
+        text = text,
+        center = center,
+        color = color,
+        size = size,
+        font = font,
+        id = ++nextTextId
+    )
 
 /** The part of the text selection box a drag grabbed. */
 internal enum class TextHandle { None, Move, Resize, Rotate, Delete }
