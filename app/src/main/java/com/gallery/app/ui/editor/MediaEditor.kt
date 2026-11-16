@@ -75,8 +75,8 @@ data class NormalizedRect(val left: Float, val top: Float, val right: Float, val
 /**
  * An edit: mirror first ([flipHorizontal]/[flipVertical] on the source frame), then rotate clockwise by
  * [rotation] degrees, then crop to [crop] (expressed in the resulting frame), then apply [colorMatrix]
- * (the combined adjustments and filter), then soften [blurStrokes], paint [drawStrokes] and finally
- * [textOverlays] on top.
+ * (the combined adjustments and filter), then soften or pixelate the bands in [blurStrokes], paint
+ * [drawStrokes] and finally [textOverlays] on top.
  */
 data class EditSpec(
     val rotation: Int,
@@ -265,11 +265,12 @@ object MediaEditor {
         val cropped = if (crop.isFull) transformed else Bitmap.createBitmap(transformed, x, y, width, height)
         // Adjustments and the selected filter are baked in after cropping so the export matches the preview.
         val colored = spec.colorMatrix?.let { applyColorMatrix(cropped, it) } ?: cropped
-        // Softened patches sit on the adjusted image, then ink, then labels: that is the preview order.
+        // Softened and pixelated patches sit on the adjusted image, then ink, then labels: that is
+        // the preview order.
         val softened = if (spec.blurStrokes.isEmpty()) {
             colored
         } else {
-            applyBlurStrokes(colored, spec.blurStrokes, crop, transformed.width, transformed.height)
+            applyPatchStrokes(colored, spec.blurStrokes, crop, transformed.width, transformed.height)
         }
         val inked = if (spec.drawStrokes.isEmpty()) {
             softened
@@ -372,42 +373,54 @@ object MediaEditor {
     }
 
     /**
-     * Replaces the bands under [strokes] with a softened copy of [source]. The mask uses the same
-     * round-capped outline as the preview, and the blurred copy is only built once per export.
+     * Replaces the bands under [strokes] with softened or pixelated copies of [source]. Every mask uses
+     * the same round-capped outline as the preview, and each copy is built only once per export.
      */
-    private fun applyBlurStrokes(
+    private fun applyPatchStrokes(
         source: Bitmap,
         strokes: List<BlurStroke>,
         crop: NormalizedRect,
         frameWidth: Int,
         frameHeight: Int
     ): Bitmap {
-        val blurred = blurredBitmap(source)
+        val blurBands = strokes.filter { !it.pixelate }
+        val mosaicBands = strokes.filter { it.pixelate }
         val scaleX = source.width / crop.width
         val scaleY = source.height / crop.height
-        val mask = blurMaskPath(
-            strokes = strokes,
+        val strokeScale = min(frameWidth, frameHeight).toFloat()
+        fun maskOf(bands: List<BlurStroke>) = blurMaskPath(
+            strokes = bands,
             originX = -crop.left * scaleX,
             originY = -crop.top * scaleY,
             scaleX = scaleX,
             scaleY = scaleY,
-            strokeScale = min(frameWidth, frameHeight).toFloat()
+            strokeScale = strokeScale
         )
         val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         canvas.drawBitmap(source, 0f, 0f, null)
+        val destination = RectF(0f, 0f, output.width.toFloat(), output.height.toFloat())
+        if (blurBands.isNotEmpty()) {
+            val copy = blurredBitmap(source)
+            // The blurred copy is tiny; stretch it over the output with filtering, as the preview does.
+            paintPatch(canvas, copy, maskOf(blurBands), destination, Paint(Paint.FILTER_BITMAP_FLAG))
+            copy.recycle()
+        }
+        if (mosaicBands.isNotEmpty()) {
+            val copy = pixelatedBitmap(source)
+            // No filtering here: every pixel of the tiny copy becomes one flat block.
+            paintPatch(canvas, copy, maskOf(mosaicBands), destination, Paint())
+            copy.recycle()
+        }
+        return output
+    }
+
+    /** Fills [mask] with [copy], stretched over [destination], and leaves the rest of [canvas] alone. */
+    private fun paintPatch(canvas: Canvas, copy: Bitmap, mask: Path, destination: RectF, paint: Paint) {
         val save = canvas.save()
         canvas.clipPath(mask)
-        // The blurred copy is tiny; stretch it over the output with filtering, as the preview does.
-        canvas.drawBitmap(
-            blurred,
-            null,
-            RectF(0f, 0f, output.width.toFloat(), output.height.toFloat()),
-            Paint(Paint.FILTER_BITMAP_FLAG)
-        )
+        canvas.drawBitmap(copy, null, destination, paint)
         canvas.restoreToCount(save)
-        blurred.recycle()
-        return output
     }
 
     /**

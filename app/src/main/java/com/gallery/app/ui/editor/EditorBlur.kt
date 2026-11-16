@@ -8,19 +8,23 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /** Which tool the Draw tab paints with. */
-enum class DrawMode { Brush, Eraser, Blur }
+enum class DrawMode { Brush, Eraser, Blur, Mosaic }
 
-/** How the blur brush is applied: a dragged band or one round patch at the finger. */
+/** How a blur or mosaic patch is applied: a dragged band or one round patch at the finger. */
 enum class BlurShape { Stroke, Circle }
 
 /**
- * One blurred band, stored in the same normalized frame coordinates as [DrawStroke] so it follows
- * rotation, mirroring and cropping with the photo. A single point renders as a round patch.
+ * One blurred or pixelated band, stored in the same normalized frame coordinates as [DrawStroke] so it
+ * follows rotation, mirroring and cropping with the photo. A single point renders as a round patch.
+ *
+ * [pixelate] picks the treatment: a softened copy or a mosaic copy of the frame under the same mask.
  */
 data class BlurStroke(
     val points: List<Offset>,
-    /** Blurred band width as a fraction of the frame's shorter side. */
-    val width: Float
+    /** Band width as a fraction of the frame's shorter side. */
+    val width: Float,
+    /** True for the mosaic brush, false for the blur brush. */
+    val pixelate: Boolean = false
 )
 
 fun BlurStroke.rotateClockwise() = copy(points = points.map { Offset(1f - it.y, it.x) })
@@ -51,6 +55,25 @@ fun blurredBitmap(source: Bitmap): Bitmap {
         (source.width * scale).roundToInt().coerceAtLeast(1),
         (source.height * scale).roundToInt().coerceAtLeast(1),
         true
+    )
+}
+
+/**
+ * The shortest side a mosaic copy is reduced to. Stretching it back with bitmap filtering off turns
+ * every source pixel into one flat square, so the shortest side is also the block count.
+ */
+private const val MosaicTargetSide = 34
+
+/** A pixelated copy of [source]: tiny and drawn stretched with filtering off. */
+fun pixelatedBitmap(source: Bitmap): Bitmap {
+    val shortest = min(source.width, source.height).coerceAtLeast(1)
+    if (shortest <= MosaicTargetSide) return Bitmap.createBitmap(source)
+    val scale = MosaicTargetSide.toFloat() / shortest
+    return Bitmap.createScaledBitmap(
+        source,
+        (source.width * scale).roundToInt().coerceAtLeast(1),
+        (source.height * scale).roundToInt().coerceAtLeast(1),
+        false
     )
 }
 

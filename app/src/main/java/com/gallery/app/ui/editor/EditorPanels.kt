@@ -359,7 +359,7 @@ private fun <T> SegmentedToggle(
     }
 }
 
-/** Brush / eraser / blur switch for the drawing tab. */
+/** Brush / eraser / blur / mosaic switch for the drawing tab. */
 @Composable
 private fun DrawModeToggle(
     mode: DrawMode,
@@ -370,7 +370,8 @@ private fun DrawModeToggle(
         options = listOf(
             DrawMode.Brush to strings.brush,
             DrawMode.Eraser to strings.eraser,
-            DrawMode.Blur to strings.blur
+            DrawMode.Blur to strings.blur,
+            DrawMode.Mosaic to strings.mosaic
         ),
         selected = mode,
         enabled = enabled,
@@ -378,7 +379,7 @@ private fun DrawModeToggle(
     )
 }
 
-/** Round patch or dragged band, shown only while the blur tool is selected. */
+/** Round patch or dragged band, shown only while the blur or mosaic tool is selected. */
 @Composable
 private fun BlurShapeToggle(
     shape: BlurShape,
@@ -431,7 +432,7 @@ private fun DrawColorRow(color: Color, enabled: Boolean, onSelectColor: (Color) 
     }
 }
 
-/** Freehand drawing: brush, eraser or blur brush, plus colours and a brush-size slider. */
+/** Freehand drawing: brush, eraser, blur or mosaic, plus colours and a brush-size slider. */
 @Composable
 internal fun DrawPanel(
     color: Color,
@@ -451,7 +452,7 @@ internal fun DrawPanel(
             .padding(top = 8.dp, bottom = 12.dp)
     ) {
         DrawModeToggle(mode = mode, enabled = enabled, onModeChange = onModeChange)
-        if (mode == DrawMode.Blur) {
+        if (mode == DrawMode.Blur || mode == DrawMode.Mosaic) {
             BlurShapeToggle(
                 shape = blurShape,
                 enabled = enabled,

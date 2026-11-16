@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.graphics.Bitmap
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.widget.Toast
@@ -327,16 +328,28 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         delay(1100)
         showSizePreview = false
     }
-    // The blur tool shows a softened copy of the frame under its mask. It is rebuilt only when the
-    // frame changes or the tool becomes active, never on every stroke; it stays tiny, so letting the
-    // collector reclaim an old copy is safer than recycling one a draw pass may still hold.
-    val blurActive = blurStrokes.isNotEmpty() || (tab == EditorTab.Draw && drawMode == DrawMode.Blur)
+    // The blur and mosaic tools show a softened or pixelated copy of the frame under their masks. The
+    // copies are rebuilt only when the frame changes or the tool becomes active, never on every stroke;
+    // they stay tiny, so letting the collector reclaim an old copy is safer than recycling one a draw
+    // pass may still hold.
+    val blurActive = blurStrokes.any { !it.pixelate } || (tab == EditorTab.Draw && drawMode == DrawMode.Blur)
+    val mosaicActive =
+        blurStrokes.any { it.pixelate } || (tab == EditorTab.Draw && drawMode == DrawMode.Mosaic)
     val blurredPreview = remember(preview, blurActive) {
         if (!blurActive) null else preview?.let { blurredBitmap(it.asAndroidBitmap()) }
     }
-    // The same colour matrix the photo is drawn with, so a blurred patch matches its surroundings.
+    val mosaicPreview = remember(preview, mosaicActive) {
+        if (!mosaicActive) null else preview?.let { pixelatedBitmap(it.asAndroidBitmap()) }
+    }
+    // The same colour matrix the photo is drawn with, so a softened or pixelated patch matches its
+    // surroundings. The mosaic copy is stretched with filtering off, which is what makes it blocky.
     val blurPaint = remember(colorMatrix) {
         Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply {
+            colorFilter = ColorMatrixColorFilter(colorMatrix)
+        }
+    }
+    val mosaicPaint = remember(colorMatrix) {
+        Paint(Paint.ANTI_ALIAS_FLAG).apply {
             colorFilter = ColorMatrixColorFilter(colorMatrix)
         }
     }
@@ -635,7 +648,11 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         blurGestureStart = snapshot()
         activeBlurPoints.clear()
         activeBlurPoints.add(normalizedPoint(position, rect))
-        activeBlur = BlurStroke(activeBlurPoints, drawWidth)
+        activeBlur = BlurStroke(
+            points = activeBlurPoints,
+            width = drawWidth,
+            pixelate = drawMode == DrawMode.Mosaic
+        )
     }
 
     fun extendBlur(position: Offset, rect: Rect) {
@@ -1101,10 +1118,21 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 )
                 // Gesture handlers outlive recomposition, so they read the rect through updated state.
                 val liveImageRect = rememberUpdatedState(imageRect)
-                // The finished bands' mask only changes when a stroke lands, not on every frame.
+                // The finished patches' masks only change when a stroke lands, not on every frame.
+                // Blur and mosaic bands are separated so each one is filled with its own copy.
                 val blurMask = remember(blurStrokes, imageRect) {
                     blurMaskPath(
-                        strokes = blurStrokes,
+                        strokes = blurStrokes.filter { !it.pixelate },
+                        originX = imageRect.left,
+                        originY = imageRect.top,
+                        scaleX = imageRect.width,
+                        scaleY = imageRect.height,
+                        strokeScale = min(imageRect.width, imageRect.height)
+                    )
+                }
+                val mosaicMask = remember(blurStrokes, imageRect) {
+                    blurMaskPath(
+                        strokes = blurStrokes.filter { it.pixelate },
                         originX = imageRect.left,
                         originY = imageRect.top,
                         scaleX = imageRect.width,
@@ -1159,7 +1187,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                                 eraseAt(down.position, rect, eraseRadius)
                                             }
 
-                                            DrawMode.Blur -> {
+                                            DrawMode.Blur, DrawMode.Mosaic -> {
                                                 toolCursor = down.position
                                                 beginBlur(down.position, rect)
                                             }
@@ -1176,7 +1204,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                             if (drawing) {
                                                 when (drawMode) {
                                                     DrawMode.Eraser -> cancelErase()
-                                                    DrawMode.Blur -> cancelBlur()
+                                                    DrawMode.Blur, DrawMode.Mosaic -> cancelBlur()
                                                     DrawMode.Brush -> cancelStroke()
                                                 }
                                                 drawing = false
@@ -1199,7 +1227,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                                         eraseAt(change.position, rect, eraseRadius)
                                                     }
 
-                                                    DrawMode.Blur -> {
+                                                    DrawMode.Blur, DrawMode.Mosaic -> {
                                                         toolCursor = change.position
                                                         extendBlur(change.position, rect)
                                                     }
@@ -1215,7 +1243,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                         toolCursor = null
                                         when (drawMode) {
                                             DrawMode.Eraser -> finishErase()
-                                            DrawMode.Blur -> finishBlur()
+                                            DrawMode.Blur, DrawMode.Mosaic -> finishBlur()
                                             DrawMode.Brush -> finishStroke()
                                         }
                                     }
@@ -1341,22 +1369,22 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     val inkBounds = cropRectIn(imageRect, crop)
                     // Ink is clipped to the crop so the preview hides what the export would cut off.
                     clipRect(inkBounds.left, inkBounds.top, inkBounds.right, inkBounds.bottom) {
-                        // Softened patches sit under the ink and text, matching the export order.
-                        val blurred = blurredPreview
-                        if (blurred != null) {
-                            val active = activeBlur
-                            val activeMask = if (active == null) {
-                                null
-                            } else {
-                                blurMaskPath(
-                                    strokes = listOf(active),
-                                    originX = imageRect.left,
-                                    originY = imageRect.top,
-                                    scaleX = imageRect.width,
-                                    scaleY = imageRect.height,
-                                    strokeScale = frameMin
-                                )
-                            }
+                        // Softened and pixelated patches sit under the ink and text, matching the
+                        // export order; the band under the finger is drawn with the same mask maths.
+                        val active = activeBlur
+                        val activeMask = if (active == null) {
+                            null
+                        } else {
+                            blurMaskPath(
+                                strokes = listOf(active),
+                                originX = imageRect.left,
+                                originY = imageRect.top,
+                                scaleX = imageRect.width,
+                                scaleY = imageRect.height,
+                                strokeScale = frameMin
+                            )
+                        }
+                        if (blurredPreview != null || mosaicPreview != null) {
                             drawIntoCanvas { canvas ->
                                 val native = canvas.nativeCanvas
                                 val destination = RectF(
@@ -1365,17 +1393,21 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     imageRect.right,
                                     imageRect.bottom
                                 )
-                                if (blurStrokes.isNotEmpty()) {
+                                fun patch(mask: Path, bitmap: Bitmap, paint: Paint) {
+                                    if (mask.isEmpty) return
                                     val save = native.save()
-                                    native.clipPath(blurMask)
-                                    native.drawBitmap(blurred, null, destination, blurPaint)
+                                    native.clipPath(mask)
+                                    native.drawBitmap(bitmap, null, destination, paint)
                                     native.restoreToCount(save)
                                 }
-                                if (activeMask != null) {
-                                    val save = native.save()
-                                    native.clipPath(activeMask)
-                                    native.drawBitmap(blurred, null, destination, blurPaint)
-                                    native.restoreToCount(save)
+                                blurredPreview?.let { patch(blurMask, it, blurPaint) }
+                                mosaicPreview?.let { patch(mosaicMask, it, mosaicPaint) }
+                                if (activeMask != null && active != null) {
+                                    if (active.pixelate) {
+                                        mosaicPreview?.let { patch(activeMask, it, mosaicPaint) }
+                                    } else {
+                                        blurredPreview?.let { patch(activeMask, it, blurPaint) }
+                                    }
                                 }
                             }
                         }
@@ -1599,7 +1631,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     // in the middle of the visible photo; it lingers a moment after release.
                     if (tab == EditorTab.Draw && showSizePreview &&
                         (drawMode == DrawMode.Brush || drawMode == DrawMode.Eraser ||
-                            drawMode == DrawMode.Blur) &&
+                            drawMode == DrawMode.Blur || drawMode == DrawMode.Mosaic) &&
                         !compareOpen && !peekOriginal
                     ) {
                         val radius = (drawWidth * frameMin / 2f).coerceAtLeast(4.dp.toPx())
