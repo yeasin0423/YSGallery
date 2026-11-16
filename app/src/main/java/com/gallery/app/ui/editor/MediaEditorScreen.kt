@@ -32,6 +32,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -58,6 +59,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Compare
 import androidx.compose.material.icons.rounded.Crop
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -303,6 +305,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     // working in the same coordinates it always used.
     var previewScale by remember { mutableFloatStateOf(1f) }
     var previewOffset by remember { mutableStateOf(Offset.Zero) }
+    // Before/after: a split view, a hold-to-peek flag, and where the divider sits (0..1).
+    var compareOpen by remember { mutableStateOf(false) }
+    var peekOriginal by remember { mutableStateOf(false) }
+    var compareSplit by remember { mutableFloatStateOf(0.5f) }
 
     val preview: ImageBitmap? = remember(source, rotation, flipHorizontal, flipVertical) {
         source?.let { MediaEditor.transform(it, rotation, flipHorizontal, flipVertical).asImageBitmap() }
@@ -524,6 +530,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         showSizePreview = false
         previewScale = 1f
         previewOffset = Offset.Zero
+        compareOpen = false
+        peekOriginal = false
+        compareSplit = 0.5f
         openPanel = EditorPanel.None
     }
 
@@ -842,6 +851,15 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         textGesture = null
     }
 
+    /** Drops whatever the photo was being painted with when the compare button takes over. */
+    fun cancelToolGesture() {
+        cancelStroke()
+        cancelErase()
+        cancelBlur()
+        cancelTextGesture()
+        toolCursor = null
+    }
+
     /**
      * Edits the selected label, or creates a centred one when nothing is selected. Typing before a new
      * box's first character counts as one step, so undo removes the box whole; clearing all text is its
@@ -960,6 +978,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     BackHandler {
         if (saving) return@BackHandler
         when {
+            compareOpen -> compareOpen = false
             openPanel != EditorPanel.None -> openPanel = EditorPanel.None
             tab != EditorTab.Crop -> {
                 if (tab == EditorTab.Text) {
@@ -1076,7 +1095,19 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             scaleX = flipXAnimation.value
                             scaleY = flipYAnimation.value
                         }
-                        .pointerInput(tab, drawMode, cropAspect, areaWidth, areaHeight, baseWidth, baseHeight) {
+                        .pointerInput(
+                            tab,
+                            drawMode,
+                            cropAspect,
+                            areaWidth,
+                            areaHeight,
+                            baseWidth,
+                            baseHeight,
+                            compareOpen,
+                            peekOriginal
+                        ) {
+                            // The split view owns the photo while it is open, and holds are read-only.
+                            if (compareOpen || peekOriginal) return@pointerInput
                             if (tab == EditorTab.Adjust || tab == EditorTab.Filters) {
                                 // Nothing is dragged on these tabs, so one finger pans and two zoom.
                                 detectTransformGestures { centroid, pan, zoom, _ ->
@@ -1468,7 +1499,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         }
                     }
                     // Ink and text are clipped to the crop; show its edge so nothing vanishes unexplained.
-                    if ((tab == EditorTab.Draw || tab == EditorTab.Text) && !crop.isFull) {
+                    if ((tab == EditorTab.Draw || tab == EditorTab.Text) && !crop.isFull &&
+                        !compareOpen && !peekOriginal
+                    ) {
                         drawRect(
                             color = Color.White.copy(alpha = 0.35f),
                             topLeft = inkBounds.topLeft,
@@ -1476,7 +1509,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             style = Stroke(1.dp.toPx())
                         )
                     }
-                    if (tab == EditorTab.Crop) {
+                    if (tab == EditorTab.Crop && !compareOpen && !peekOriginal) {
                         val cropRect = cropRectIn(imageRect, crop)
                         val shade = Color.Black.copy(alpha = 0.55f)
                         // Dim everything outside the crop.
@@ -1510,7 +1543,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     }
                     // The eraser and blur brush cursor: a white ring around the area a drag touches,
                     // with a faint shadow ring so it stays visible on white photos.
-                    if (tab == EditorTab.Draw && drawMode != DrawMode.Brush) {
+                    if (tab == EditorTab.Draw && drawMode != DrawMode.Brush &&
+                        !compareOpen && !peekOriginal
+                    ) {
                         toolCursor?.let { point ->
                             val radius =
                                 (drawWidth * frameMin / 2f).coerceAtLeast(10.dp.toPx())
@@ -1536,7 +1571,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     // While the width slider moves, show the exact brush or eraser footprint in the
                     // middle of the visible photo; it lingers a moment after release.
                     if (tab == EditorTab.Draw && showSizePreview &&
-                        (drawMode == DrawMode.Brush || drawMode == DrawMode.Eraser)
+                        (drawMode == DrawMode.Brush || drawMode == DrawMode.Eraser) &&
+                        !compareOpen && !peekOriginal
                     ) {
                         val radius = (drawWidth * frameMin / 2f).coerceAtLeast(4.dp.toPx())
                         val visible = imageRect.intersect(Rect(Offset.Zero, size))
@@ -1558,6 +1594,124 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         }
                     }
                 }
+
+                // Before/after: the untouched frame is drawn over the left part of the photo, or
+                // over all of it while peeking. The edited half is the canvas underneath.
+                if (compareOpen || peekOriginal) {
+                    val split = if (compareOpen) compareSplit else 1f
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                rotationZ = rotateAnimation.value
+                                scaleX = flipXAnimation.value
+                                scaleY = flipYAnimation.value
+                            }
+                            .then(
+                                if (compareOpen) {
+                                    Modifier.pointerInput(Unit) {
+                                        detectHorizontalDragGestures { change, dragAmount ->
+                                            change.consume()
+                                            val rect = liveImageRect.value
+                                            if (rect.width > 0f) {
+                                                compareSplit =
+                                                    (compareSplit + dragAmount / rect.width)
+                                                        .coerceIn(0f, 1f)
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        clipRect(
+                            imageRect.left,
+                            imageRect.top,
+                            imageRect.left + imageRect.width * split,
+                            imageRect.bottom
+                        ) {
+                            drawImage(
+                                image = image,
+                                dstOffset = IntOffset(
+                                    imageRect.left.roundToInt(),
+                                    imageRect.top.roundToInt()
+                                ),
+                                dstSize = IntSize(
+                                    imageRect.width.roundToInt(),
+                                    imageRect.height.roundToInt()
+                                )
+                            )
+                        }
+                        if (compareOpen) {
+                            val x = imageRect.left + imageRect.width * compareSplit
+                            drawLine(
+                                color = Color.Black.copy(alpha = 0.35f),
+                                start = Offset(x, imageRect.top),
+                                end = Offset(x, imageRect.bottom),
+                                strokeWidth = 3.dp.toPx()
+                            )
+                            drawLine(
+                                color = Color.White,
+                                start = Offset(x, imageRect.top),
+                                end = Offset(x, imageRect.bottom),
+                                strokeWidth = 1.5.dp.toPx()
+                            )
+                            // A round grip with chevrons, so the divider reads as draggable.
+                            val center = Offset(x, imageRect.center.y)
+                            val radius = 14.dp.toPx()
+                            drawCircle(Color.Black.copy(alpha = 0.22f), radius + 1.dp.toPx(), center)
+                            drawCircle(Color.White, radius, center)
+                            val arm = radius * 0.42f
+                            val arrow = Color(0xFF111111)
+                            drawLine(
+                                arrow,
+                                Offset(center.x - arm, center.y - arm),
+                                Offset(center.x - arm * 1.8f, center.y),
+                                2.dp.toPx()
+                            )
+                            drawLine(
+                                arrow,
+                                Offset(center.x - arm * 1.8f, center.y),
+                                Offset(center.x - arm, center.y + arm),
+                                2.dp.toPx()
+                            )
+                            drawLine(
+                                arrow,
+                                Offset(center.x + arm, center.y - arm),
+                                Offset(center.x + arm * 1.8f, center.y),
+                                2.dp.toPx()
+                            )
+                            drawLine(
+                                arrow,
+                                Offset(center.x + arm * 1.8f, center.y),
+                                Offset(center.x + arm, center.y + arm),
+                                2.dp.toPx()
+                            )
+                        }
+                    }
+                }
+
+                CompareButton(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 2.dp),
+                    enabled = !saving && preview != null,
+                    comparisonOpen = compareOpen,
+                    onToggle = {
+                        if (compareOpen) {
+                            compareOpen = false
+                        } else {
+                            cancelToolGesture()
+                            compareSplit = 0.5f
+                            compareOpen = true
+                        }
+                    },
+                    onPeekChange = { peeking ->
+                        if (peeking) cancelToolGesture()
+                        peekOriginal = peeking
+                    }
+                )
 
                 // A transparent field owns the IME while the label is typed; the glyphs and the caret
                 // are painted on the canvas above, so the box itself stays fully draggable.
@@ -2261,4 +2415,71 @@ private fun dragCorner(
     val left = if (fromLeft) anchorX - width else anchorX
     val top = if (fromTop) anchorY - height else anchorY
     return NormalizedRect(left, top, left + width, top + height)
+}
+
+/**
+ * The before/after button pinned to the right of the photo. A tap opens or closes the split view;
+ * holding it shows the untouched frame until the finger lifts.
+ */
+@Composable
+private fun CompareButton(
+    modifier: Modifier = Modifier,
+    enabled: Boolean,
+    comparisonOpen: Boolean,
+    onToggle: () -> Unit,
+    onPeekChange: (Boolean) -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    Box(
+        modifier = modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(palette.surface.copy(alpha = 0.94f))
+            .border(1.dp, palette.onBackground.copy(alpha = 0.10f), CircleShape)
+            .pointerInput(enabled, comparisonOpen) {
+                if (!enabled) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    var moved = false
+                    // Releasing before the long-press timeout is a tap; holding is a peek.
+                    val releasedEarly = withTimeoutOrNull(
+                        viewConfiguration.longPressTimeoutMillis
+                    ) {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                            if (change == null) break
+                            if (!change.pressed) return@withTimeoutOrNull true
+                            if ((change.position - down.position).getDistance() > 12.dp.toPx()) {
+                                moved = true
+                                change.consume()
+                                break
+                            }
+                        }
+                        false
+                    }
+                    when {
+                        releasedEarly == true -> onToggle()
+                        releasedEarly == false && moved -> Unit
+                        releasedEarly == null && !comparisonOpen -> {
+                            // Holding shows the original for as long as the finger stays down.
+                            onPeekChange(true)
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.changes.none { it.pressed }) break
+                            }
+                            onPeekChange(false)
+                        }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Compare,
+            contentDescription = strings.compare,
+            tint = if (enabled) palette.onBackground else palette.textMuted,
+            modifier = Modifier.size(22.dp)
+        )
+    }
 }

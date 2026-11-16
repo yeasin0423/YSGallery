@@ -31,6 +31,7 @@ interface AppStrings {
     // General actions
     val back: String
     val close: String
+    val compare: String
     val cancel: String
     val create: String
     val rename: String
@@ -367,6 +368,7 @@ interface AppStrings {
 object EnglishStrings : AppStrings {
     override val back = "Back"
     override val close = "Close"
+    override val compare = "Compare"
     override val cancel = "Cancel"
     override val create = "Create"
     override val rename = "Rename"
