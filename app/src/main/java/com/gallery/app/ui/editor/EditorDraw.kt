@@ -34,8 +34,10 @@ val EditorDrawColors: List<Color> = listOf(
     Color(0xFFEC407A)
 )
 
-const val MinDrawWidth = 0.006f
-const val MaxDrawWidth = 0.06f
+// The slider covers a hairline to a band wider than a third of the frame, so a big soft brush is
+// possible at the top of the range instead of stopping at a small tip.
+const val MinDrawWidth = 0.004f
+const val MaxDrawWidth = 0.36f
 const val DefaultDrawWidth = 0.02f
 
 fun DrawStroke.rotateClockwise() = copy(points = points.map { Offset(1f - it.y, it.x) })

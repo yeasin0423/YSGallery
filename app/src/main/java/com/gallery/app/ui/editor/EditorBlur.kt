@@ -10,9 +10,12 @@ import kotlin.math.roundToInt
 /** Which tool the Draw tab paints with. */
 enum class DrawMode { Brush, Eraser, Blur }
 
+/** How the blur brush is applied: a dragged band or one round patch at the finger. */
+enum class BlurShape { Stroke, Circle }
+
 /**
  * One blurred band, stored in the same normalized frame coordinates as [DrawStroke] so it follows
- * rotation, mirroring and cropping with the photo.
+ * rotation, mirroring and cropping with the photo. A single point renders as a round patch.
  */
 data class BlurStroke(
     val points: List<Offset>,

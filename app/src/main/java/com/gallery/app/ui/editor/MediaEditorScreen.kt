@@ -29,8 +29,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -76,6 +78,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -164,6 +167,9 @@ private data class EditorSnapshot(
 
 private const val MaxHistory = 60
 
+/** How far the photo can be pinched in before the editor stops zooming. */
+private const val MaxPreviewZoom = 6f
+
 /** A text-box drag in progress: which control was grabbed and the label state when it began. */
 private data class TextGesture(
     val handle: TextHandle,
@@ -233,6 +239,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     // Live points of the stroke under the finger; a snapshot list keeps long strokes cheap to extend.
     val activePoints = remember { mutableStateListOf<Offset>() }
     var drawMode by remember { mutableStateOf(DrawMode.Brush) }
+    var blurShape by remember { mutableStateOf(BlurShape.Stroke) }
     var blurStrokes by remember { mutableStateOf<List<BlurStroke>>(emptyList()) }
     var activeBlur by remember { mutableStateOf<BlurStroke?>(null) }
     val activeBlurPoints = remember { mutableStateListOf<Offset>() }
@@ -289,6 +296,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     val rotateAnimation = remember { Animatable(0f) }
     val flipXAnimation = remember { Animatable(1f) }
     val flipYAnimation = remember { Animatable(1f) }
+    // Pinch zoom and two-finger pan. They only move the preview rectangle, so every tool keeps
+    // working in the same coordinates it always used.
+    var previewScale by remember { mutableFloatStateOf(1f) }
+    var previewOffset by remember { mutableStateOf(Offset.Zero) }
 
     val preview: ImageBitmap? = remember(source, rotation, flipHorizontal, flipVertical) {
         source?.let { MediaEditor.transform(it, rotation, flipHorizontal, flipVertical).asImageBitmap() }
@@ -499,6 +510,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         selectedTextId = null
         pendingTextCreate = null
         drawMode = DrawMode.Brush
+        blurShape = BlurShape.Stroke
+        previewScale = 1f
+        previewOffset = Offset.Zero
         openPanel = EditorPanel.None
     }
 
@@ -554,6 +568,25 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         eraseGestureStart = snapshot()
     }
 
+    /** Drops an in-progress stroke without leaving a dot or an undo step. */
+    fun cancelStroke() {
+        activeStroke = null
+        activePoints.clear()
+        strokeGestureStart = null
+    }
+
+    /** A pinch interrupted the eraser: put back what it wiped. */
+    fun cancelErase() {
+        eraseGestureStart?.let { strokes = it.strokes }
+        eraseGestureStart = null
+    }
+
+    fun cancelBlur() {
+        activeBlur = null
+        activeBlurPoints.clear()
+        blurGestureStart = null
+    }
+
     /** Removes every stroke that passes under the eraser. One undo step per erase gesture. */
     fun eraseAt(position: Offset, rect: Rect, radiusPx: Float) {
         if (strokes.isEmpty() || rect.width <= 0f || rect.height <= 0f) return
@@ -587,6 +620,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     fun extendBlur(position: Offset, rect: Rect) {
         if (activeBlur == null) return
         val point = normalizedPoint(position, rect)
+        // A round patch follows the finger as one spot; the band grows point by point.
+        if (blurShape == BlurShape.Circle) {
+            activeBlurPoints.clear()
+            activeBlurPoints.add(point)
+            return
+        }
         val last = activeBlurPoints.lastOrNull() ?: return
         if (abs((point.x - last.x) * rect.width) < 1f &&
             abs((point.y - last.y) * rect.height) < 1f
@@ -785,6 +824,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         textGesture = null
     }
 
+    /** A pinch interrupted a label drag: put the box back where it started. */
+    fun cancelTextGesture() {
+        textGestureStart?.let { textOverlays = it.texts }
+        textGestureStart = null
+        textGesture = null
+    }
+
     /**
      * Edits the selected label, or creates a centred one when nothing is selected. Typing before a new
      * box's first character counts as one step, so undo removes the box whole; clearing all text is its
@@ -962,13 +1008,42 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 }
                 val areaWidth = constraints.maxWidth.toFloat()
                 val areaHeight = constraints.maxHeight.toFloat()
-                val scale = min(areaWidth / image.width, areaHeight / image.height)
-                val drawWidth = image.width * scale
-                val drawHeight = image.height * scale
+                val fitScale = min(areaWidth / image.width, areaHeight / image.height)
+                val baseWidth = image.width * fitScale
+                val baseHeight = image.height * fitScale
+
+                /** Keeps the photo from being panned fully out of the viewport. */
+                fun clampPreviewOffset(offset: Offset, zoom: Float): Offset {
+                    val maxX = ((baseWidth * zoom - areaWidth) / 2f).coerceAtLeast(0f)
+                    val maxY = ((baseHeight * zoom - areaHeight) / 2f).coerceAtLeast(0f)
+                    return Offset(offset.x.coerceIn(-maxX, maxX), offset.y.coerceIn(-maxY, maxY))
+                }
+
+                /** Pinch zoom around [centroid] plus two-finger pan, both in view pixels. */
+                fun applyTransform(zoomChange: Float, pan: Offset, centroid: Offset) {
+                    val oldZoom = previewScale
+                    val newZoom = (oldZoom * zoomChange).coerceIn(1f, MaxPreviewZoom)
+                    val ratio = newZoom / oldZoom
+                    val center = Offset(areaWidth / 2f, areaHeight / 2f)
+                    val fromCenter = centroid - center
+                    val moved = previewOffset * ratio + fromCenter * (1f - ratio) + pan
+                    previewScale = newZoom
+                    previewOffset = clampPreviewOffset(moved, newZoom)
+                }
+
+                val visibleOffset = clampPreviewOffset(previewOffset, previewScale)
+                // Named apart from the brush width so tool code never picks this up by accident.
+                val frameDrawWidth = baseWidth * previewScale
+                val frameDrawHeight = baseHeight * previewScale
                 val imageRect = Rect(
-                    Offset((areaWidth - drawWidth) / 2f, (areaHeight - drawHeight) / 2f),
-                    Size(drawWidth, drawHeight)
+                    Offset(
+                        areaWidth / 2f + visibleOffset.x - frameDrawWidth / 2f,
+                        areaHeight / 2f + visibleOffset.y - frameDrawHeight / 2f
+                    ),
+                    Size(frameDrawWidth, frameDrawHeight)
                 )
+                // Gesture handlers outlive recomposition, so they read the rect through updated state.
+                val liveImageRect = rememberUpdatedState(imageRect)
                 // The finished bands' mask only changes when a stroke lands, not on every frame.
                 val blurMask = remember(blurStrokes, imageRect) {
                     blurMaskPath(
@@ -990,47 +1065,89 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             scaleX = flipXAnimation.value
                             scaleY = flipYAnimation.value
                         }
-                        .pointerInput(imageRect, cropAspect, tab, drawMode) {
+                        .pointerInput(tab, drawMode, cropAspect, areaWidth, areaHeight, baseWidth, baseHeight) {
+                            if (tab == EditorTab.Adjust || tab == EditorTab.Filters) {
+                                // Nothing is dragged on these tabs, so one finger pans and two zoom.
+                                detectTransformGestures { centroid, pan, zoom, _ ->
+                                    applyTransform(zoom, pan, centroid)
+                                }
+                                return@pointerInput
+                            }
                             if (tab == EditorTab.Draw) {
-                                val eraseRadius = 18.dp.toPx()
-                                // A raw down/drag loop keeps the tool cursor under the finger from the
-                                // first touch and paints a dot for a tap, which the slop-based detector
-                                // would swallow.
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
-                                    when (drawMode) {
-                                        DrawMode.Eraser -> {
-                                            toolCursor = down.position
-                                            beginErase()
-                                            eraseAt(down.position, imageRect, eraseRadius)
-                                            drag(down.id) { change ->
-                                                change.consume()
-                                                toolCursor = change.position
-                                                eraseAt(change.position, imageRect, eraseRadius)
+                                    val rect = liveImageRect.value
+                                    // The eraser is as wide as the slider says, like the brush.
+                                    val eraseRadius = (drawWidth * min(rect.width, rect.height) / 2f)
+                                        .coerceAtLeast(10.dp.toPx())
+                                    // A touch in the letterbox around the photo does nothing.
+                                    var drawing = rect.contains(down.position)
+                                    if (drawing) {
+                                        when (drawMode) {
+                                            DrawMode.Eraser -> {
+                                                toolCursor = down.position
+                                                beginErase()
+                                                eraseAt(down.position, rect, eraseRadius)
                                             }
-                                            toolCursor = null
-                                            finishErase()
-                                        }
 
-                                        DrawMode.Blur -> {
-                                            toolCursor = down.position
-                                            beginBlur(down.position, imageRect)
-                                            drag(down.id) { change ->
-                                                change.consume()
-                                                toolCursor = change.position
-                                                extendBlur(change.position, imageRect)
+                                            DrawMode.Blur -> {
+                                                toolCursor = down.position
+                                                beginBlur(down.position, rect)
                                             }
-                                            toolCursor = null
-                                            finishBlur()
-                                        }
 
-                                        DrawMode.Brush -> {
-                                            beginStroke(down.position, imageRect)
-                                            drag(down.id) { change ->
-                                                change.consume()
-                                                extendStroke(change.position, imageRect)
+                                            DrawMode.Brush -> beginStroke(down.position, rect)
+                                        }
+                                    }
+                                    var transformed = false
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.count { it.pressed } >= 2) {
+                                            // A second finger turns this into zoom/pan: drop the tool
+                                            // action without leaving a dot or an undo step behind.
+                                            if (drawing) {
+                                                when (drawMode) {
+                                                    DrawMode.Eraser -> cancelErase()
+                                                    DrawMode.Blur -> cancelBlur()
+                                                    DrawMode.Brush -> cancelStroke()
+                                                }
+                                                drawing = false
+                                                toolCursor = null
                                             }
-                                            finishStroke()
+                                            transformed = true
+                                            event.changes.forEach { it.consume() }
+                                            applyTransform(
+                                                zoomChange = event.calculateZoom(),
+                                                pan = event.calculatePan(),
+                                                centroid = event.calculateCentroid(useCurrent = true)
+                                            )
+                                        } else if (drawing && !transformed) {
+                                            val change = event.changes.firstOrNull { it.id == down.id }
+                                            if (change != null && change.pressed) {
+                                                change.consume()
+                                                when (drawMode) {
+                                                    DrawMode.Eraser -> {
+                                                        toolCursor = change.position
+                                                        eraseAt(change.position, rect, eraseRadius)
+                                                    }
+
+                                                    DrawMode.Blur -> {
+                                                        toolCursor = change.position
+                                                        extendBlur(change.position, rect)
+                                                    }
+
+                                                    DrawMode.Brush ->
+                                                        extendStroke(change.position, rect)
+                                                }
+                                            }
+                                        }
+                                        if (event.changes.none { it.pressed }) break
+                                    }
+                                    if (drawing) {
+                                        toolCursor = null
+                                        when (drawMode) {
+                                            DrawMode.Eraser -> finishErase()
+                                            DrawMode.Blur -> finishBlur()
+                                            DrawMode.Brush -> finishStroke()
                                         }
                                     }
                                 }
@@ -1042,72 +1159,107 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                 // handles are easy to catch.
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
-                                    if (beginTextGesture(down.position, imageRect)) {
-                                        val bodyGrab = textGesture?.handle == TextHandle.Move
-                                        var moved = false
-                                        val tapSlop = 8.dp.toPx()
-                                        drag(down.id) { change ->
-                                            change.consume()
-                                            if ((change.position - down.position).getDistance() > tapSlop) {
-                                                moved = true
+                                    val rect = liveImageRect.value
+                                    val tapSlop = 8.dp.toPx()
+                                    // A delete fires here and leaves no gesture behind.
+                                    val handled = beginTextGesture(down.position, rect)
+                                    var active = textGesture != null
+                                    val bodyGrab = textGesture?.handle == TextHandle.Move
+                                    var moved = false
+                                    var transformed = false
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.count { it.pressed } >= 2) {
+                                            if (active) {
+                                                cancelTextGesture()
+                                                active = false
                                             }
-                                            updateTextGesture(change.position, imageRect)
+                                            transformed = true
+                                            event.changes.forEach { it.consume() }
+                                            applyTransform(
+                                                zoomChange = event.calculateZoom(),
+                                                pan = event.calculatePan(),
+                                                centroid = event.calculateCentroid(useCurrent = true)
+                                            )
+                                        } else if (!transformed) {
+                                            val change = event.changes.firstOrNull { it.id == down.id }
+                                            if (change != null && change.pressed) {
+                                                change.consume()
+                                                if ((change.position - down.position).getDistance() >
+                                                    tapSlop
+                                                ) {
+                                                    moved = true
+                                                }
+                                                if (active) updateTextGesture(change.position, rect)
+                                            }
                                         }
+                                        if (event.changes.none { it.pressed }) break
+                                    }
+                                    if (active) {
                                         finishTextGesture()
                                         // Tapping the label (rather than dragging it) opens the
                                         // keyboard, so the caret appears inside the box.
                                         if (bodyGrab && !moved) textFocusToken += 1
-                                    } else {
-                                        // A pan over empty canvas does nothing; only a tap adds a box.
-                                        var moved = false
-                                        val tapSlop = 18.dp.toPx()
-                                        drag(down.id) { change ->
-                                            change.consume()
-                                            if ((change.position - down.position).getDistance() > tapSlop) {
-                                                moved = true
-                                            }
-                                        }
-                                        if (!moved) createTextAt(down.position, imageRect)
+                                    } else if (!handled && !transformed && !moved &&
+                                        rect.contains(down.position)
+                                    ) {
+                                        createTextAt(down.position, rect)
                                     }
                                 }
                                 return@pointerInput
                             }
                             if (tab != EditorTab.Crop) return@pointerInput
                             val touchSlop = 28.dp.toPx()
-                            detectDragGestures(
-                                onDragStart = { position ->
-                                    val handle = hitTest(
-                                        position,
-                                        cropRectIn(imageRect, crop),
-                                        touchSlop,
-                                        cornersOnly = cropAspect != null
-                                    )
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val rect = liveImageRect.value
+                                val handle = hitTest(
+                                    down.position,
+                                    cropRectIn(rect, crop),
+                                    touchSlop,
+                                    cornersOnly = cropAspect != null
+                                )
+                                var transformed = false
+                                if (handle != CropHandle.NONE) {
                                     activeHandle = handle
-                                    cropGestureStart = if (handle != CropHandle.NONE) snapshot() else null
-                                },
-                                onDrag = { change, drag ->
-                                    if (activeHandle != CropHandle.NONE) {
-                                        change.consume()
-                                        crop = applyDrag(
-                                            crop,
-                                            activeHandle,
-                                            drag.x / imageRect.width,
-                                            drag.y / imageRect.height,
-                                            cropAspect
-                                        )
-                                    }
-                                },
-                                onDragEnd = {
-                                    activeHandle = CropHandle.NONE
-                                    cropGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
-                                    cropGestureStart = null
-                                },
-                                onDragCancel = {
-                                    activeHandle = CropHandle.NONE
-                                    cropGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
-                                    cropGestureStart = null
+                                    cropGestureStart = snapshot()
                                 }
-                            )
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    if (event.changes.count { it.pressed } >= 2) {
+                                        // A pinch takes over: undo the half-made crop change.
+                                        cropGestureStart?.let { crop = it.crop }
+                                        cropGestureStart = null
+                                        activeHandle = CropHandle.NONE
+                                        transformed = true
+                                        event.changes.forEach { it.consume() }
+                                        applyTransform(
+                                            zoomChange = event.calculateZoom(),
+                                            pan = event.calculatePan(),
+                                            centroid = event.calculateCentroid(useCurrent = true)
+                                        )
+                                    } else if (!transformed && handle != CropHandle.NONE) {
+                                        val change = event.changes.firstOrNull { it.id == down.id }
+                                        if (change != null && change.pressed) {
+                                            change.consume()
+                                            val drag = change.position - change.previousPosition
+                                            crop = applyDrag(
+                                                crop,
+                                                handle,
+                                                drag.x / rect.width,
+                                                drag.y / rect.height,
+                                                cropAspect
+                                            )
+                                        }
+                                    }
+                                    if (event.changes.none { it.pressed }) break
+                                }
+                                activeHandle = CropHandle.NONE
+                                if (!transformed) {
+                                    cropGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+                                }
+                                cropGestureStart = null
+                            }
                         }
                 ) {
                     drawImage(
@@ -1349,11 +1501,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     // with a faint shadow ring so it stays visible on white photos.
                     if (tab == EditorTab.Draw && drawMode != DrawMode.Brush) {
                         toolCursor?.let { point ->
-                            val radius = if (drawMode == DrawMode.Blur) {
+                            val radius =
                                 (drawWidth * frameMin / 2f).coerceAtLeast(10.dp.toPx())
-                            } else {
-                                18.dp.toPx()
-                            }
                             drawCircle(
                                 color = Color.White.copy(alpha = 0.18f),
                                 radius = radius,
@@ -1488,6 +1637,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     color = drawColor,
                     brushWidth = drawWidth,
                     mode = drawMode,
+                    blurShape = blurShape,
                     enabled = !saving && preview != null,
                     onSelectColor = {
                         drawColor = it
@@ -1497,7 +1647,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     onModeChange = { mode ->
                         drawMode = mode
                         toolCursor = null
-                    }
+                    },
+                    onBlurShapeChange = { blurShape = it }
                 )
 
                 EditorTab.Text -> TextPanel(

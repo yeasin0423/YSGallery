@@ -58,7 +58,8 @@ internal fun EditorTabs(selected: EditorTab, enabled: Boolean, onSelect: (Editor
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            // A little breathing room under the pills so they don't hug the gesture bar.
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 18.dp)
             .clip(CircleShape)
             .background(palette.surface)
             .padding(4.dp),
@@ -318,12 +319,13 @@ internal fun FilterPanel(
     }
 }
 
-/** Brush / eraser / blur switch for the drawing tab. */
+/** One One UI segmented switch shared by the tool and blur-shape rows. */
 @Composable
-private fun DrawModeToggle(
-    mode: DrawMode,
+private fun <T> SegmentedToggle(
+    options: List<Pair<T, String>>,
+    selected: T,
     enabled: Boolean,
-    onModeChange: (DrawMode) -> Unit
+    onSelect: (T) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Row(
@@ -335,30 +337,64 @@ private fun DrawModeToggle(
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        listOf(
-            DrawMode.Brush to strings.brush,
-            DrawMode.Eraser to strings.eraser,
-            DrawMode.Blur to strings.blur
-        ).forEach { (value, label) ->
-            val selected = value == mode
+        options.forEach { (value, label) ->
+            val active = value == selected
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .clip(CircleShape)
-                    .background(if (selected) palette.accent else Color.Transparent)
-                    .clickable(enabled = enabled) { onModeChange(value) }
+                    .background(if (active) palette.accent else Color.Transparent)
+                    .clickable(enabled = enabled) { onSelect(value) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = label,
-                    color = if (selected) palette.onAccent else palette.onBackground,
+                    color = if (active) palette.onAccent else palette.onBackground,
                     fontSize = 13.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal
                 )
             }
         }
     }
+}
+
+/** Brush / eraser / blur switch for the drawing tab. */
+@Composable
+private fun DrawModeToggle(
+    mode: DrawMode,
+    enabled: Boolean,
+    onModeChange: (DrawMode) -> Unit
+) {
+    SegmentedToggle(
+        options = listOf(
+            DrawMode.Brush to strings.brush,
+            DrawMode.Eraser to strings.eraser,
+            DrawMode.Blur to strings.blur
+        ),
+        selected = mode,
+        enabled = enabled,
+        onSelect = onModeChange
+    )
+}
+
+/** Round patch or dragged band, shown only while the blur tool is selected. */
+@Composable
+private fun BlurShapeToggle(
+    shape: BlurShape,
+    enabled: Boolean,
+    onShapeChange: (BlurShape) -> Unit
+) {
+    Spacer(modifier = Modifier.height(6.dp))
+    SegmentedToggle(
+        options = listOf(
+            BlurShape.Stroke to strings.blurStroke,
+            BlurShape.Circle to strings.circle
+        ),
+        selected = shape,
+        enabled = enabled,
+        onSelect = onShapeChange
+    )
 }
 
 /** Shared colour swatches for the draw and text tabs. */
@@ -395,16 +431,18 @@ private fun DrawColorRow(color: Color, enabled: Boolean, onSelectColor: (Color) 
     }
 }
 
-/** Freehand drawing: brush, eraser or blur brush, colours and a brush-size slider. */
+/** Freehand drawing: brush, eraser or blur brush, plus colours and a brush-size slider. */
 @Composable
 internal fun DrawPanel(
     color: Color,
     brushWidth: Float,
     mode: DrawMode,
+    blurShape: BlurShape,
     enabled: Boolean,
     onSelectColor: (Color) -> Unit,
     onBrushWidthChange: (Float) -> Unit,
-    onModeChange: (DrawMode) -> Unit
+    onModeChange: (DrawMode) -> Unit,
+    onBlurShapeChange: (BlurShape) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Column(
@@ -413,50 +451,56 @@ internal fun DrawPanel(
             .padding(top = 8.dp, bottom = 12.dp)
     ) {
         DrawModeToggle(mode = mode, enabled = enabled, onModeChange = onModeChange)
+        if (mode == DrawMode.Blur) {
+            BlurShapeToggle(
+                shape = blurShape,
+                enabled = enabled,
+                onShapeChange = onBlurShapeChange
+            )
+        }
         if (mode == DrawMode.Brush) {
             Spacer(modifier = Modifier.height(8.dp))
             DrawColorRow(color = color, enabled = enabled, onSelectColor = onSelectColor)
         }
-        if (mode != DrawMode.Eraser) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 22.dp, end = 22.dp, top = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = strings.brushSize,
-                    color = palette.onBackground,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                // A dot that shows the current brush thickness.
-                Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
-                    Box(
-                        modifier = Modifier
-                            .size((brushWidth / MaxDrawWidth * 18f).coerceIn(4f, 18f).dp)
-                            .clip(CircleShape)
-                            .background(color)
-                            .border(1.dp, palette.onBackground.copy(alpha = 0.2f), CircleShape)
-                    )
-                }
-            }
-            Slider(
-                value = brushWidth,
-                onValueChange = onBrushWidthChange,
-                valueRange = MinDrawWidth..MaxDrawWidth,
-                enabled = enabled,
-                colors = SliderDefaults.colors(
-                    thumbColor = palette.accent,
-                    activeTrackColor = palette.accent,
-                    inactiveTrackColor = palette.surfaceVariant,
-                    activeTickColor = Color.Transparent,
-                    inactiveTickColor = Color.Transparent
-                ),
-                modifier = Modifier.padding(horizontal = 14.dp)
+        // Every tool shares the width slider now, so the eraser can be as wide as the brush.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 22.dp, end = 22.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = strings.brushSize,
+                color = palette.onBackground,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
             )
+            Spacer(modifier = Modifier.weight(1f))
+            // A dot that shows the current brush thickness.
+            Box(modifier = Modifier.size(22.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier
+                        .size((brushWidth / MaxDrawWidth * 18f).coerceIn(4f, 18f).dp)
+                        .clip(CircleShape)
+                        .background(color)
+                        .border(1.dp, palette.onBackground.copy(alpha = 0.2f), CircleShape)
+                )
+            }
         }
+        Slider(
+            value = brushWidth,
+            onValueChange = onBrushWidthChange,
+            valueRange = MinDrawWidth..MaxDrawWidth,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = palette.accent,
+                activeTrackColor = palette.accent,
+                inactiveTrackColor = palette.surfaceVariant,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent
+            ),
+            modifier = Modifier.padding(horizontal = 14.dp)
+        )
     }
 }
 
