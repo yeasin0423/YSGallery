@@ -19,12 +19,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,10 +51,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Compare
 import androidx.compose.material.icons.rounded.Crop
@@ -276,16 +273,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             typeface = Typeface.DEFAULT_BOLD
         }
     }
-    // A hidden field owns the keyboard; the label and its caret are drawn on the photo itself.
+    // The floating writing bar owns the keyboard; the label on the photo is just painted text.
     val textFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    var textEditorFocused by remember { mutableStateOf(false) }
-    val caretAlpha by rememberInfiniteTransition(label = "textCaret").animateFloat(
-        initialValue = 1f,
-        targetValue = 0.12f,
-        animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
-        label = "textCaretAlpha"
-    )
 
     var undoStack by remember { mutableStateOf<List<EditorSnapshot>>(emptyList()) }
     var redoStack by remember { mutableStateOf<List<EditorSnapshot>>(emptyList()) }
@@ -737,6 +727,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
 
+    /** Ticking the writing bar finishes the label; an empty box is dropped without an undo step. */
+    fun finishTextEdit() {
+        discardBlankText()
+        selectedTextId = null
+        keyboardController?.hide()
+    }
+
     /** Drops the empty box a tap opened but the user never typed into. Not an undo step. */
     fun discardBlankText() {
         val selected = selectedText()
@@ -775,7 +772,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         textOverlays = textOverlays.filterNot { it.id == overlay.id }
         if (selectedTextId == overlay.id) selectedTextId = null
         pendingTextCreate = null
-        textEditorFocused = false
     }
 
     /**
@@ -1026,11 +1022,11 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         when {
             compareOpen -> compareOpen = false
             openPanel != EditorPanel.None -> openPanel = EditorPanel.None
+            tab == EditorTab.Text && selectedTextId != null -> finishTextEdit()
             tab != EditorTab.Crop -> {
                 if (tab == EditorTab.Text) {
                     discardBlankText()
                     selectedTextId = null
-                    textEditorFocused = false
                 }
                 tab = EditorTab.Crop
             }
@@ -1323,7 +1319,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     if (active) {
                                         finishTextGesture()
                                         // Tapping the label (rather than dragging it) opens the
-                                        // keyboard, so the caret appears inside the box.
+                                        // writing bar's keyboard; a drag only selects the box.
                                         if (bodyGrab && !moved) textFocusToken += 1
                                     } else if (!handled && !transformed && !moved &&
                                         rect.contains(down.position)
@@ -1623,21 +1619,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     end = Offset(delete.x + arm, delete.y - arm),
                                     strokeWidth = 1.6.dp.toPx()
                                 )
-                                // The caret blinks at the end of the text while typing, so the user sees
-                                // where the characters land without any field on the panel.
-                                if (textEditorFocused) {
-                                    textPaint.typeface = overlay.font.typeface()
-                                    textPaint.textSize = overlay.size * frameMin
-                                    val endX = box.center.x + textPaint.measureText(overlay.text) / 2f +
-                                            2.dp.toPx()
-                                    val metrics = textPaint.fontMetrics
-                                    drawLine(
-                                        color = overlay.color.copy(alpha = caretAlpha),
-                                        start = Offset(endX, box.center.y + metrics.ascent),
-                                        end = Offset(endX, box.center.y + metrics.descent),
-                                        strokeWidth = 2.dp.toPx()
-                                    )
-                                }
                             }
                         }
                     }
@@ -1836,34 +1817,14 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     }
                 }
 
-                // A transparent field owns the IME while the label is typed; the glyphs and the caret
-                // are painted on the canvas above, so the box itself stays fully draggable.
-                val editing = selectedText()
-                if (tab == EditorTab.Text && editing != null) {
-                    BasicTextField(
-                        value = editing.text,
-                        onValueChange = ::changeText,
-                        singleLine = true,
-                        textStyle = TextStyle(color = Color.Transparent, fontSize = 1.sp),
-                        cursorBrush = SolidColor(Color.Transparent),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        modifier = Modifier
-                            .size(1.dp)
-                            .alpha(0f)
-                            .focusRequester(textFocusRequester)
-                            .onFocusChanged { textEditorFocused = it.isFocused }
-                    )
-                }
-            }
-
-            // A fresh box (or a tap on an existing one) raises the keyboard after the layout settles.
-            // Only those explicit taps bump the token, so grabbing a corner or knob never opens the
-            // keyboard mid-drag and resizes the preview under the finger.
+            // A fresh box (or a tap on an existing one) raises the writing bar's keyboard after the
+            // layout settles. Only those explicit taps bump the token, so grabbing a corner or knob
+            // never opens the keyboard mid-drag and resizes the preview under the finger.
             LaunchedEffect(textFocusToken) {
                 if (textFocusToken == 0 || tab != EditorTab.Text || selectedTextId == null) {
                     return@LaunchedEffect
                 }
-                delay(60)
+                delay(120)
                 runCatching { textFocusRequester.requestFocus() }
                 keyboardController?.show()
             }
@@ -1982,6 +1943,21 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 )
             }
 
+            // The writing bar floats above the section pills while a label is selected.
+            AnimatedVisibility(
+                visible = tab == EditorTab.Text && selectedText() != null && !saving,
+                enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
+                exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
+            ) {
+                TextEntryBar(
+                    value = selectedText()?.text ?: "",
+                    enabled = !saving,
+                    focusRequester = textFocusRequester,
+                    onValueChange = ::changeText,
+                    onDone = ::finishTextEdit
+                )
+            }
+
             // The section pills sit at the very bottom; their controls open in the space above them.
             EditorTabs(
                 selected = tab,
@@ -1990,7 +1966,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     if (tab == EditorTab.Text && selected != EditorTab.Text) {
                         discardBlankText()
                         selectedTextId = null
-                        textEditorFocused = false
                     }
                     tab = selected
                     openPanel = EditorPanel.None
@@ -2613,5 +2588,73 @@ private fun CompareButton(
             tint = if (enabled) palette.onBackground else palette.textMuted,
             modifier = Modifier.size(22.dp)
         )
+    }
+}
+
+/**
+ * The floating writing bar shown while a label is selected. It owns the keyboard, mirrors the label
+ * live as the user types, and its tick finishes the edit and closes the keyboard.
+ */
+@Composable
+private fun TextEntryBar(
+    value: String,
+    enabled: Boolean,
+    focusRequester: FocusRequester,
+    onValueChange: (String) -> Unit,
+    onDone: () -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    val shape = RoundedCornerShape(26.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 6.dp)
+            .clip(shape)
+            .background(palette.surface.copy(alpha = 0.98f))
+            .border(1.dp, palette.onBackground.copy(alpha = 0.08f), shape)
+            .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            singleLine = true,
+            textStyle = TextStyle(color = palette.onBackground, fontSize = 16.sp),
+            cursorBrush = SolidColor(palette.accent),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onDone() }),
+            decorationBox = { field ->
+                Box {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = strings.textPlaceholder,
+                            color = palette.textMuted,
+                            fontSize = 16.sp
+                        )
+                    }
+                    field()
+                }
+            },
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester)
+        )
+        Box(
+            modifier = Modifier
+                .padding(start = 10.dp)
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(if (enabled) palette.accent else palette.surfaceVariant)
+                .clickable(enabled = enabled, onClick = onDone),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Check,
+                contentDescription = strings.done,
+                tint = if (enabled) palette.onAccent else palette.textMuted,
+                modifier = Modifier.size(22.dp)
+            )
+        }
     }
 }
