@@ -12,7 +12,9 @@ import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -75,8 +77,8 @@ data class NormalizedRect(val left: Float, val top: Float, val right: Float, val
 /**
  * An edit: mirror first ([flipHorizontal]/[flipVertical] on the source frame), then rotate clockwise by
  * [rotation] degrees, then crop to [crop] (expressed in the resulting frame), then apply [colorMatrix]
- * (the combined adjustments and filter), then soften or pixelate the bands in [blurStrokes], paint
- * [drawStrokes] and finally [textOverlays] on top.
+ * (the combined adjustments and filter), then soften or pixelate the bands in [blurStrokes], add the
+ * [bokeh] lights, paint [drawStrokes] and finally [textOverlays] on top.
  */
 data class EditSpec(
     val rotation: Int,
@@ -84,6 +86,7 @@ data class EditSpec(
     val flipVertical: Boolean,
     val crop: NormalizedRect,
     val colorMatrix: FloatArray? = null,
+    val bokeh: Boolean = false,
     val drawStrokes: List<DrawStroke> = emptyList(),
     val blurStrokes: List<BlurStroke> = emptyList(),
     val textOverlays: List<TextOverlay> = emptyList()
@@ -272,10 +275,15 @@ object MediaEditor {
         } else {
             applyPatchStrokes(colored, spec.blurStrokes, crop, transformed.width, transformed.height)
         }
-        val inked = if (spec.drawStrokes.isEmpty()) {
-            softened
+        val lit = if (spec.bokeh) {
+            applyBokeh(softened, crop, transformed.width, transformed.height)
         } else {
-            applyDrawStrokes(softened, spec.drawStrokes, crop, transformed.width, transformed.height)
+            softened
+        }
+        val inked = if (spec.drawStrokes.isEmpty()) {
+            lit
+        } else {
+            applyDrawStrokes(lit, spec.drawStrokes, crop, transformed.width, transformed.height)
         }
         // Labels sit above the ink, in the same order the preview draws them.
         val labelBitmaps = mutableListOf<Bitmap>()
@@ -300,7 +308,8 @@ object MediaEditor {
             throw e
         } finally {
             labelBitmaps.forEach { it.recycle() }
-            if (inked !== softened) inked.recycle()
+            if (inked !== lit) inked.recycle()
+            if (lit !== softened) lit.recycle()
             if (softened !== colored) softened.recycle()
             if (colored !== cropped) colored.recycle()
             if (cropped !== transformed) cropped.recycle()
@@ -411,6 +420,44 @@ object MediaEditor {
             // No filtering here: every pixel of the tiny copy becomes one flat block.
             paintPatch(canvas, copy, maskOf(mosaicBands), destination, Paint())
             copy.recycle()
+        }
+        return output
+    }
+
+    /**
+     * Paints the fixed [BokehOrbs] over [source]. Each orb is a radial gradient from its colour to
+     * transparent, placed in normalized coordinates so it follows the crop like the ink does.
+     */
+    private fun applyBokeh(
+        source: Bitmap,
+        crop: NormalizedRect,
+        frameWidth: Int,
+        frameHeight: Int
+    ): Bitmap {
+        val scaleX = source.width / crop.width
+        val scaleY = source.height / crop.height
+        val radiusScale = min(frameWidth, frameHeight).toFloat()
+        val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        BokehOrbs.forEach { orb ->
+            val radius = orb.radius * radiusScale
+            if (radius <= 0f) return@forEach
+            val x = -crop.left * scaleX + orb.center.x * scaleX
+            val y = -crop.top * scaleY + orb.center.y * scaleY
+            val core = orb.color.copy(alpha = orb.alpha).toArgb()
+            val halo = orb.color.copy(alpha = orb.alpha * 0.5f).toArgb()
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = RadialGradient(
+                    x,
+                    y,
+                    radius,
+                    intArrayOf(core, halo, android.graphics.Color.TRANSPARENT),
+                    floatArrayOf(0f, 0.55f, 1f),
+                    Shader.TileMode.CLAMP
+                )
+            }
+            canvas.drawCircle(x, y, radius, paint)
         }
         return output
     }

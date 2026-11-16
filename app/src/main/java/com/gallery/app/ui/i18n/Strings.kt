@@ -64,6 +64,7 @@ interface AppStrings {
     val crop: String
     val adjust: String
     val filters: String
+    val bokeh: String
     val draw: String
     val eraser: String
     val blur: String
@@ -402,6 +403,7 @@ object EnglishStrings : AppStrings {
     override val crop = "Crop"
     override val adjust = "Adjust"
     override val filters = "Filters"
+    override val bokeh = "Bokeh"
     override val draw = "Draw"
     override val eraser = "Eraser"
     override val blur = "Blur"

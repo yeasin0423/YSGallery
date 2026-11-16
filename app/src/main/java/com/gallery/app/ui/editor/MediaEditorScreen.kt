@@ -95,6 +95,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -164,6 +165,7 @@ private data class EditorSnapshot(
     val ratio: CropRatio,
     val adjustments: EditorAdjustments,
     val filter: EditorFilter,
+    val bokeh: Boolean,
     val strokes: List<DrawStroke>,
     val blurStrokes: List<BlurStroke>,
     val texts: List<TextOverlay>
@@ -236,6 +238,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var selectedAdjustment by remember { mutableStateOf(EditorAdjustment.Brightness) }
     var adjustments by remember { mutableStateOf(EditorAdjustments()) }
     var filter by remember { mutableStateOf(EditorFilterNone) }
+    // Renders the fixed bokeh orb set over the photo; part of the image, so it is undoable.
+    var bokeh by remember { mutableStateOf(false) }
     var drawColor by remember { mutableStateOf(EditorDrawColors.first()) }
     var drawWidth by remember { mutableFloatStateOf(DefaultDrawWidth) }
     // Every width-slider move bumps this, so a ring shows the real brush/eraser size over the photo.
@@ -354,8 +358,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
     val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
-            !adjustments.isNeutral || filter.id != EditorFilterNone.id || strokes.isNotEmpty() ||
-            blurStrokes.isNotEmpty() || textOverlays.any { it.text.isNotBlank() }
+            !adjustments.isNeutral || filter.id != EditorFilterNone.id || bokeh ||
+            strokes.isNotEmpty() || blurStrokes.isNotEmpty() ||
+            textOverlays.any { it.text.isNotBlank() }
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
     val canUndo = undoStack.isNotEmpty()
     val canRedo = redoStack.isNotEmpty()
@@ -368,6 +373,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ratio = ratio,
         adjustments = adjustments,
         filter = filter,
+        bokeh = bokeh,
         strokes = strokes,
         blurStrokes = blurStrokes,
         texts = textOverlays
@@ -387,6 +393,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ratio = state.ratio
         adjustments = state.adjustments
         filter = state.filter
+        bokeh = state.bokeh
         strokes = state.strokes
         blurStrokes = state.blurStrokes
         // Empty boxes only exist while being typed into; history keeps them out of the way.
@@ -530,6 +537,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = EditorAdjustments()
         selectedAdjustment = EditorAdjustment.Brightness
         filter = EditorFilterNone
+        bokeh = false
         strokes = emptyList()
         activeStroke = null
         blurStrokes = emptyList()
@@ -927,6 +935,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             flipVertical = flipVertical,
             crop = crop,
             colorMatrix = colorMatrix,
+            bokeh = bokeh,
             drawStrokes = strokes,
             blurStrokes = blurStrokes,
             textOverlays = textOverlays
@@ -967,6 +976,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             flipVertical = flipVertical,
             crop = crop,
             colorMatrix = colorMatrix,
+            bokeh = bokeh,
             drawStrokes = strokes,
             blurStrokes = blurStrokes,
             textOverlays = textOverlays
@@ -1411,6 +1421,30 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                 }
                             }
                         }
+                        // Bokeh lights sit above the patches and below the ink, matching the export.
+                        if (bokeh) {
+                            BokehOrbs.forEach { orb ->
+                                val center = Offset(
+                                    imageRect.left + orb.center.x * imageRect.width,
+                                    imageRect.top + orb.center.y * imageRect.height
+                                )
+                                val radius = orb.radius * frameMin
+                                if (radius <= 0f) return@forEach
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colorStops = arrayOf(
+                                            0f to orb.color.copy(alpha = orb.alpha),
+                                            0.55f to orb.color.copy(alpha = orb.alpha * 0.5f),
+                                            1f to Color.Transparent
+                                        ),
+                                        center = center,
+                                        radius = radius
+                                    ),
+                                    radius = radius,
+                                    center = center
+                                )
+                            }
+                        }
                         strokes.forEach { stroke ->
                             drawEditorStroke(
                                 stroke = stroke,
@@ -1849,12 +1883,19 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             preview = image,
                             filters = EditorFilters,
                             selected = filter,
+                            bokeh = bokeh,
                             enabled = !saving,
                             matrixFor = { candidate -> editorColorMatrix(adjustments, candidate) },
                             onSelect = { candidate ->
                                 if (candidate.id != filter.id) {
                                     pushHistory()
                                     filter = candidate
+                                }
+                            },
+                            onToggleBokeh = { on ->
+                                if (on != bokeh) {
+                                    pushHistory()
+                                    bokeh = on
                                 }
                             }
                         )

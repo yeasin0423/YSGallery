@@ -26,6 +26,8 @@ import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -255,65 +257,98 @@ private fun adjustmentValue(value: Float): String {
     return if (percent > 0) "+$percent" else percent.toString()
 }
 
-/** The 21 presets as live thumbnails; each thumbnail already includes the current adjustments. */
+/**
+ * The 21 presets as live thumbnails, each already including the current adjustments, plus the Bokeh
+ * switch that lights the photo with soft out-of-focus orbs.
+ */
 @Composable
 internal fun FilterPanel(
     preview: ImageBitmap,
     filters: List<EditorFilter>,
     selected: EditorFilter,
+    bokeh: Boolean,
     enabled: Boolean,
     matrixFor: (EditorFilter) -> FloatArray,
-    onSelect: (EditorFilter) -> Unit
+    onSelect: (EditorFilter) -> Unit,
+    onToggleBokeh: (Boolean) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        filters.forEach { filter ->
-            val isSelected = filter.id == selected.id
-            Column(
-                modifier = Modifier
-                    .width(72.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable(enabled = enabled) { onSelect(filter) }
-                    .padding(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Canvas(
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 22.dp, end = 14.dp, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = strings.bokeh,
+                color = palette.onBackground,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Switch(
+                checked = bokeh,
+                onCheckedChange = onToggleBokeh,
+                enabled = enabled,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = palette.onAccent,
+                    checkedTrackColor = palette.accent,
+                    uncheckedThumbColor = palette.textMuted,
+                    uncheckedTrackColor = palette.surfaceVariant,
+                    uncheckedBorderColor = Color.Transparent
+                )
+            )
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            filters.forEach { filter ->
+                val isSelected = filter.id == selected.id
+                Column(
                     modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(13.dp))
-                        .then(
-                            if (isSelected) {
-                                Modifier.border(2.dp, palette.accent, RoundedCornerShape(13.dp))
-                            } else {
-                                Modifier
-                            }
-                        )
+                        .width(72.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(enabled = enabled) { onSelect(filter) }
+                        .padding(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val side = min(preview.width, preview.height)
-                    drawImage(
-                        image = preview,
-                        srcOffset = IntOffset((preview.width - side) / 2, (preview.height - side) / 2),
-                        srcSize = IntSize(side, side),
-                        dstOffset = IntOffset.Zero,
-                        dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-                        colorFilter = ColorFilter.colorMatrix(ColorMatrix(values = matrixFor(filter)))
+                    Canvas(
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(13.dp))
+                            .then(
+                                if (isSelected) {
+                                    Modifier.border(2.dp, palette.accent, RoundedCornerShape(13.dp))
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        val side = min(preview.width, preview.height)
+                        drawImage(
+                            image = preview,
+                            srcOffset = IntOffset((preview.width - side) / 2, (preview.height - side) / 2),
+                            srcSize = IntSize(side, side),
+                            dstOffset = IntOffset.Zero,
+                            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                            colorFilter = ColorFilter.colorMatrix(ColorMatrix(values = matrixFor(filter)))
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text = filter.name,
+                        color = if (isSelected) palette.accent else palette.onBackground,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1
                     )
                 }
-                Spacer(modifier = Modifier.height(5.dp))
-                Text(
-                    text = filter.name,
-                    color = if (isSelected) palette.accent else palette.onBackground,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1
-                )
             }
         }
     }
