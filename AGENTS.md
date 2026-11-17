@@ -103,9 +103,10 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
   always returns `EnglishStrings`. Do not reintroduce a language picker or `GermanStrings`.
 - The manifest has a single launcher alias, `.LauncherOneUi`. `LauncherIcon.apply` also disables the old
   Gemini/iOS/HyperOS aliases from previous builds.
-- Launcher icons are plain PNGs in `res/mipmap-*dpi/` (`ic_launcher`, `ic_launcher_oneui`) rendered from
-  the repository's `latest.svg`. There are no adaptive-icon XMLs; keep it that way unless the artwork
-  is reworked into separate background/foreground layers.
+- Launcher icons are adaptive: `res/mipmap-anydpi-v26/ic_launcher*.xml` use the solid pink
+  `@color/ic_launcher_background` plus `@mipmap/ic_launcher_foreground`, all rendered from the
+  repository's `latest.svg`. The legacy squircle PNGs in `res/mipmap-*dpi/` stay as fallbacks. The
+  adaptive background is what keeps launchers from drawing a white plate around the artwork.
 - The settings hub shows only section titles. Counts, storage summaries and version numbers belong on
   the pushed pages, not in the list rows.
 - Legacy `amoled_gallery_*` SharedPreferences names are kept intentionally so existing settings survive.
