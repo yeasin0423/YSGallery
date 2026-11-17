@@ -172,7 +172,7 @@ private data class EditorSnapshot(
     val ratio: CropRatio,
     val adjustments: EditorAdjustments,
     val filter: EditorFilter,
-    val bokeh: Boolean,
+    val bokeh: BokehStyle,
     val frame: EditorFrame,
     val strokes: List<DrawStroke>,
     val blurStrokes: List<BlurStroke>,
@@ -246,8 +246,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var selectedAdjustment by remember { mutableStateOf(EditorAdjustment.Brightness) }
     var adjustments by remember { mutableStateOf(EditorAdjustments()) }
     var filter by remember { mutableStateOf(EditorFilterNone) }
-    // Renders the fixed bokeh orb set over the photo; part of the image, so it is undoable.
-    var bokeh by remember { mutableStateOf(false) }
+    // Renders the selected bokeh light set over the photo; part of the image, so it is undoable.
+    var bokehStyle by remember { mutableStateOf(BokehStyle.None) }
     var frame by remember { mutableStateOf(EditorFrame.None) }
     var drawColor by remember { mutableStateOf(EditorDrawColors.first()) }
     var drawWidth by remember { mutableFloatStateOf(DefaultDrawWidth) }
@@ -371,7 +371,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
     val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
-            !adjustments.isNeutral || filter.id != EditorFilterNone.id || bokeh ||
+            !adjustments.isNeutral || filter.id != EditorFilterNone.id || bokehStyle != BokehStyle.None ||
             frame != EditorFrame.None || strokes.isNotEmpty() || blurStrokes.isNotEmpty() ||
             textOverlays.any { it.text.isNotBlank() }
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
@@ -392,7 +392,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ratio = ratio,
         adjustments = adjustments,
         filter = filter,
-        bokeh = bokeh,
+        bokeh = bokehStyle,
         frame = frame,
         strokes = strokes,
         blurStrokes = blurStrokes,
@@ -413,7 +413,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ratio = state.ratio
         adjustments = state.adjustments
         filter = state.filter
-        bokeh = state.bokeh
+        bokehStyle = state.bokeh
         frame = state.frame
         strokes = state.strokes
         blurStrokes = state.blurStrokes
@@ -559,7 +559,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = EditorAdjustments()
         selectedAdjustment = EditorAdjustment.Brightness
         filter = EditorFilterNone
-        bokeh = false
+        bokehStyle = BokehStyle.None
         frame = EditorFrame.None
         strokes = emptyList()
         activeStroke = null
@@ -1003,7 +1003,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             flipVertical = flipVertical,
             crop = crop,
             colorMatrix = colorMatrix,
-            bokeh = bokeh,
+            bokeh = bokehStyle,
             drawStrokes = strokes,
             frame = frame,
             blurStrokes = blurStrokes,
@@ -1045,7 +1045,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             flipVertical = flipVertical,
             crop = crop,
             colorMatrix = colorMatrix,
-            bokeh = bokeh,
+            bokeh = bokehStyle,
             drawStrokes = strokes,
             frame = frame,
             blurStrokes = blurStrokes,
@@ -1536,8 +1536,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             }
                         }
                         // Bokeh lights sit above the patches and below the ink, matching the export.
-                        if (bokeh) {
-                            BokehOrbs.forEach { orb ->
+                        if (bokehStyle != BokehStyle.None) {
+                            bokehStyle.orbs.forEach { orb ->
                                 val center = Offset(
                                     imageRect.left + orb.center.x * imageRect.width,
                                     imageRect.top + orb.center.y * imageRect.height
@@ -2007,7 +2007,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             preview = image,
                             filters = EditorFilters,
                             selected = filter,
-                            bokeh = bokeh,
+                            bokeh = bokehStyle,
                             frame = frame,
                             enabled = !saving,
                             matrixFor = { candidate -> editorColorMatrix(adjustments, candidate) },
@@ -2017,10 +2017,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     filter = candidate
                                 }
                             },
-                            onToggleBokeh = { on ->
-                                if (on != bokeh) {
+                            onSelectBokeh = { chosen ->
+                                if (chosen != bokehStyle) {
                                     pushHistory()
-                                    bokeh = on
+                                    bokehStyle = chosen
                                 }
                             },
                             onSelectFrame = { chosen ->

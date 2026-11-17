@@ -76,6 +76,12 @@ interface AppStrings {
     val adjust: String
     val filters: String
     val bokeh: String
+    val bokehNone: String
+    val bokehWarm: String
+    val bokehGolden: String
+    val bokehCool: String
+    val bokehDreamy: String
+    val bokehNight: String
     val draw: String
     val eraser: String
     val blur: String
@@ -444,6 +450,12 @@ object EnglishStrings : AppStrings {
     override val adjust = "Adjust"
     override val filters = "Filters"
     override val bokeh = "Bokeh"
+    override val bokehNone = "None"
+    override val bokehWarm = "Warm"
+    override val bokehGolden = "Golden"
+    override val bokehCool = "Cool"
+    override val bokehDreamy = "Dreamy"
+    override val bokehNight = "Night"
     override val draw = "Draw"
     override val eraser = "Eraser"
     override val blur = "Blur"

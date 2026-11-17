@@ -26,8 +26,6 @@ import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -273,12 +271,12 @@ internal fun FilterPanel(
     preview: ImageBitmap,
     filters: List<EditorFilter>,
     selected: EditorFilter,
-    bokeh: Boolean,
+    bokeh: BokehStyle,
     frame: EditorFrame,
     enabled: Boolean,
     matrixFor: (EditorFilter) -> FloatArray,
     onSelect: (EditorFilter) -> Unit,
-    onToggleBokeh: (Boolean) -> Unit,
+    onSelectBokeh: (BokehStyle) -> Unit,
     onSelectFrame: (EditorFrame) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
@@ -296,31 +294,38 @@ internal fun FilterPanel(
         )
         when (section) {
             FilterSection.Filters -> {
+                Text(
+                    text = strings.bokeh,
+                    color = palette.onBackground,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(start = 22.dp, top = 10.dp)
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 22.dp, end = 14.dp, top = 10.dp),
+                        .horizontalScroll(rememberScrollState())
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = strings.bokeh,
-                        color = palette.onBackground,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = bokeh,
-                        onCheckedChange = onToggleBokeh,
-                        enabled = enabled,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = palette.onAccent,
-                            checkedTrackColor = palette.accent,
-                            uncheckedThumbColor = palette.textMuted,
-                            uncheckedTrackColor = palette.surfaceVariant,
-                            uncheckedBorderColor = Color.Transparent
-                        )
-                    )
+                    BokehStyle.entries.forEach { option ->
+                        val isSelected = option == bokeh
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isSelected) palette.accent else palette.surfaceVariant)
+                                .clickable(enabled = enabled) { onSelectBokeh(option) }
+                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                        ) {
+                            Text(
+                                text = bokehLabel(option),
+                                color = if (isSelected) palette.onAccent else palette.onBackground,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
+                    }
                 }
                 Row(
                     modifier = Modifier
@@ -424,6 +429,15 @@ internal fun FilterPanel(
 }
 
 private enum class FilterSection { Filters, Frames }
+
+private fun bokehLabel(style: BokehStyle): String = when (style) {
+    BokehStyle.None -> strings.bokehNone
+    BokehStyle.Warm -> strings.bokehWarm
+    BokehStyle.Golden -> strings.bokehGolden
+    BokehStyle.Cool -> strings.bokehCool
+    BokehStyle.Dreamy -> strings.bokehDreamy
+    BokehStyle.Night -> strings.bokehNight
+}
 
 private fun frameLabel(frame: EditorFrame): String = when (frame) {
     EditorFrame.None -> strings.frameNone

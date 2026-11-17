@@ -85,7 +85,7 @@ data class EditSpec(
     val flipVertical: Boolean,
     val crop: NormalizedRect,
     val colorMatrix: FloatArray? = null,
-    val bokeh: Boolean = false,
+    val bokeh: BokehStyle = BokehStyle.None,
     val drawStrokes: List<DrawStroke> = emptyList(),
     val frame: EditorFrame = EditorFrame.None,
     val blurStrokes: List<BlurStroke> = emptyList(),
@@ -275,8 +275,8 @@ object MediaEditor {
         } else {
             applyPatchStrokes(colored, spec.blurStrokes, crop, transformed.width, transformed.height)
         }
-        val lit = if (spec.bokeh) {
-            applyBokeh(softened, crop, transformed.width, transformed.height)
+        val lit = if (spec.bokeh != BokehStyle.None) {
+            applyBokeh(softened, crop, transformed.width, transformed.height, spec.bokeh)
         } else {
             softened
         }
@@ -427,14 +427,15 @@ object MediaEditor {
     }
 
     /**
-     * Paints the fixed [BokehOrbs] over [source]. Each orb is a radial gradient from its colour to
-     * transparent, placed in normalized coordinates so it follows the crop like the ink does.
+     * Paints the chosen [BokehStyle]'s orbs over [source]. Each orb is a radial gradient from its
+     * colour to transparent, placed in normalized coordinates so it follows the crop like the ink.
      */
     private fun applyBokeh(
         source: Bitmap,
         crop: NormalizedRect,
         frameWidth: Int,
-        frameHeight: Int
+        frameHeight: Int,
+        style: BokehStyle
     ): Bitmap {
         val scaleX = source.width / crop.width
         val scaleY = source.height / crop.height
@@ -442,7 +443,7 @@ object MediaEditor {
         val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         canvas.drawBitmap(source, 0f, 0f, null)
-        BokehOrbs.forEach { orb ->
+        style.orbs.forEach { orb ->
             val radius = orb.radius * radiusScale
             if (radius <= 0f) return@forEach
             val x = -crop.left * scaleX + orb.center.x * scaleX
