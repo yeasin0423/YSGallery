@@ -89,6 +89,12 @@ interface AppStrings {
     val fontHandwritten: String
     val fontItalic: String
     val fontBoldItalic: String
+    val fontSerifBold: String
+    val fontCondensed: String
+    val fontLight: String
+    val fontMedium: String
+    val fontBlack: String
+    val fontMonospace: String
     val brushSize: String
     val undo: String
     val redo: String
@@ -446,6 +452,12 @@ object EnglishStrings : AppStrings {
     override val fontHandwritten = "Handwritten"
     override val fontItalic = "Italic"
     override val fontBoldItalic = "Bold italic"
+    override val fontSerifBold = "Serif bold"
+    override val fontCondensed = "Condensed"
+    override val fontLight = "Light"
+    override val fontMedium = "Medium"
+    override val fontBlack = "Black"
+    override val fontMonospace = "Mono"
     override val brushSize = "Brush size"
     override val undo = "Undo"
     override val redo = "Redo"

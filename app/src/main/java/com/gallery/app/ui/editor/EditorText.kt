@@ -28,7 +28,10 @@ data class TextOverlay(
 )
 
 /** The typefaces the text panel offers. Bold is the default, as labels were always drawn bold. */
-enum class TextFont { Bold, Regular, Serif, Handwritten, Italic, BoldItalic }
+enum class TextFont {
+    Bold, Regular, Serif, Handwritten, Italic, BoldItalic,
+    SerifBold, Condensed, Light, Medium, Black, Monospace
+}
 
 /** The Android typeface for a label style; the preview and the export both use this one mapping. */
 fun TextFont.typeface(): Typeface = when (this) {
@@ -39,6 +42,13 @@ fun TextFont.typeface(): Typeface = when (this) {
     TextFont.Handwritten -> Typeface.create("cursive", Typeface.NORMAL)
     TextFont.Italic -> Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
     TextFont.BoldItalic -> Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
+    TextFont.SerifBold -> Typeface.create(Typeface.SERIF, Typeface.BOLD)
+    // Platform family names every Android release ships, so no font files are needed.
+    TextFont.Condensed -> Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+    TextFont.Light -> Typeface.create("sans-serif-light", Typeface.NORMAL)
+    TextFont.Medium -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    TextFont.Black -> Typeface.create("sans-serif-black", Typeface.NORMAL)
+    TextFont.Monospace -> Typeface.MONOSPACE
 }
 
 private var nextTextId = 0L

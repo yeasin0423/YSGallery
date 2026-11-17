@@ -705,12 +705,16 @@ private fun FontChip(
 ) {
     val palette = LocalAppTheme.current.palette
     val family = when (font) {
-        TextFont.Serif -> FontFamily.Serif
+        TextFont.Serif, TextFont.SerifBold -> FontFamily.Serif
         TextFont.Handwritten -> FontFamily.Cursive
+        TextFont.Monospace -> FontFamily.Monospace
         else -> FontFamily.SansSerif
     }
     val weight = when (font) {
-        TextFont.Bold, TextFont.BoldItalic -> FontWeight.Bold
+        TextFont.Bold, TextFont.BoldItalic, TextFont.SerifBold -> FontWeight.Bold
+        TextFont.Black -> FontWeight.Black
+        TextFont.Light -> FontWeight.Light
+        TextFont.Medium -> FontWeight.Medium
         else -> FontWeight.Normal
     }
     val style = when (font) {
@@ -742,4 +746,10 @@ private fun fontLabel(font: TextFont): String = when (font) {
     TextFont.Handwritten -> strings.fontHandwritten
     TextFont.Italic -> strings.fontItalic
     TextFont.BoldItalic -> strings.fontBoldItalic
+    TextFont.SerifBold -> strings.fontSerifBold
+    TextFont.Condensed -> strings.fontCondensed
+    TextFont.Light -> strings.fontLight
+    TextFont.Medium -> strings.fontMedium
+    TextFont.Black -> strings.fontBlack
+    TextFont.Monospace -> strings.fontMonospace
 }
