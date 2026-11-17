@@ -297,6 +297,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var showSaveMenu by remember { mutableStateOf(false) }
     var saveMenuAnchor by remember { mutableStateOf<Rect?>(null) }
     var showOverwriteDialog by remember { mutableStateOf(false) }
+    var showDiscardDialog by remember { mutableStateOf(false) }
     var pendingOverwrite by remember { mutableStateOf<Pair<PendingIntent, File>?>(null) }
 
     val rotateAnimation = remember { Animatable(0f) }
@@ -359,6 +360,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
     val canUndo = undoStack.isNotEmpty()
     val canRedo = redoStack.isNotEmpty()
+
+    /** Closing with unsaved edits asks first; an untouched photo just closes. */
+    fun requestClose() {
+        if (saving) return
+        if (changed) showDiscardDialog = true else onClose()
+    }
 
     fun snapshot() = EditorSnapshot(
         rotation = rotation,
@@ -1038,7 +1045,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 }
                 tab = EditorTab.Crop
             }
-            else -> onClose()
+            else -> requestClose()
         }
     }
 
@@ -1063,7 +1070,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 onUndo = ::undo,
                 onRedo = ::redo,
                 onReset = ::reset,
-                onClose = onClose,
+                onClose = ::requestClose,
                 onSaveCopy = ::saveCopy,
                 onSaveOptions = { showSaveMenu = true },
                 onOptionsBounds = { saveMenuAnchor = it }
@@ -2034,6 +2041,27 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             }
         }
     )
+
+    if (showDiscardDialog) {
+        ThemedDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = strings.unsavedTitle,
+            message = strings.unsavedMessage,
+            buttons = listOf(
+                DialogButton(strings.cancel, style = DialogButtonStyle.Cancel) {
+                    showDiscardDialog = false
+                },
+                DialogButton(strings.discard, style = DialogButtonStyle.Destructive) {
+                    showDiscardDialog = false
+                    onClose()
+                },
+                DialogButton(strings.saveCopy, style = DialogButtonStyle.Primary) {
+                    showDiscardDialog = false
+                    saveCopy()
+                }
+            )
+        )
+    }
 
     if (showOverwriteDialog) {
         ThemedDialog(

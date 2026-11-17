@@ -101,6 +101,9 @@ interface AppStrings {
     val whitePoint: String
     val highlights: String
     val saveCopy: String
+    val discard: String
+    val unsavedTitle: String
+    val unsavedMessage: String
     val saveOptions: String
     val overwriteOriginal: String
     val overwriteTitle: String
@@ -453,6 +456,9 @@ object EnglishStrings : AppStrings {
     override val whitePoint = "White point"
     override val highlights = "Highlights"
     override val saveCopy = "Save copy"
+    override val discard = "Discard"
+    override val unsavedTitle = "Discard changes?"
+    override val unsavedMessage = "Your edits have not been saved. Save a copy before leaving the editor?"
     override val saveOptions = "Save options"
     override val overwriteOriginal = "Overwrite original"
     override val overwriteTitle = "Overwrite original?"
