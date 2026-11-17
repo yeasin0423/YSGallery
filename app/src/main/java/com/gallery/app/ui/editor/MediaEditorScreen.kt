@@ -60,7 +60,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Compare
 import androidx.compose.material.icons.rounded.Crop
-import androidx.compose.material.icons.rounded.FilterFrames
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Restore
@@ -153,7 +152,7 @@ val LocalOnMediaEdited = staticCompositionLocalOf<() -> Unit> { {} }
 private enum class CropHandle { NONE, MOVE, LEFT, TOP, RIGHT, BOTTOM, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
 /** The inline panel under the preview. Only one is open at a time. */
-private enum class EditorPanel { None, Rotate, Ratio, Frame }
+private enum class EditorPanel { None, Rotate, Ratio }
 
 /** Everything an undo step restores. The selected tab and open panel are UI state, not image state. */
 private data class EditorSnapshot(
@@ -1864,16 +1863,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             panel = shownPanel,
                             enabled = !saving && preview != null,
                             ratio = ratio,
-                            frame = frame,
                             onRotateLeft = { rotate(clockwise = false) },
                             onRotateRight = { rotate(clockwise = true) },
-                            onSelectRatio = ::chooseRatio,
-                            onSelectFrame = { chosen ->
-                                if (chosen != frame) {
-                                    pushHistory()
-                                    frame = chosen
-                                }
-                            }
+                            onSelectRatio = ::chooseRatio
                         )
                     }
 
@@ -1890,8 +1882,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             openPanel = EditorPanel.None
                             mirrorVertically()
                         },
-                        onToggleRatio = { togglePanel(EditorPanel.Ratio) },
-                        onToggleFrame = { togglePanel(EditorPanel.Frame) }
+                        onToggleRatio = { togglePanel(EditorPanel.Ratio) }
                     )
                 }
 
@@ -1927,6 +1918,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             filters = EditorFilters,
                             selected = filter,
                             bokeh = bokeh,
+                            frame = frame,
                             enabled = !saving,
                             matrixFor = { candidate -> editorColorMatrix(adjustments, candidate) },
                             onSelect = { candidate ->
@@ -1939,6 +1931,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                 if (on != bokeh) {
                                     pushHistory()
                                     bokeh = on
+                                }
+                            },
+                            onSelectFrame = { chosen ->
+                                if (chosen != frame) {
+                                    pushHistory()
+                                    frame = chosen
                                 }
                             }
                         )
@@ -2293,8 +2291,7 @@ private fun EditorToolbar(
     onToggleRotate: () -> Unit,
     onMirrorHorizontally: () -> Unit,
     onMirrorVertically: () -> Unit,
-    onToggleRatio: () -> Unit,
-    onToggleFrame: () -> Unit
+    onToggleRatio: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -2330,13 +2327,6 @@ private fun EditorToolbar(
             enabled = enabled,
             selected = openPanel == EditorPanel.Ratio
         )
-        ThemedToolItem(
-            icon = Icons.Rounded.FilterFrames,
-            label = strings.frame,
-            onClick = onToggleFrame,
-            enabled = enabled,
-            selected = openPanel == EditorPanel.Frame
-        )
     }
 }
 
@@ -2346,11 +2336,9 @@ private fun EditorInlinePanel(
     panel: EditorPanel,
     enabled: Boolean,
     ratio: CropRatio,
-    frame: EditorFrame,
     onRotateLeft: () -> Unit,
     onRotateRight: () -> Unit,
-    onSelectRatio: (CropRatio) -> Unit,
-    onSelectFrame: (EditorFrame) -> Unit
+    onSelectRatio: (CropRatio) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Box(
@@ -2363,7 +2351,6 @@ private fun EditorInlinePanel(
         when (panel) {
             EditorPanel.Rotate -> RotatePanel(enabled, onRotateLeft, onRotateRight)
             EditorPanel.Ratio -> RatioPicker(ratio, onSelectRatio)
-            EditorPanel.Frame -> FramePicker(frame, onSelectFrame)
             EditorPanel.None -> Unit
         }
     }
@@ -2423,64 +2410,6 @@ private fun PanelAction(
         Spacer(modifier = Modifier.width(8.dp))
         Text(label, color = content, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
-}
-
-/** The frame styles as thumbnails showing the border on a neutral sample. */
-@Composable
-private fun FramePicker(selected: EditorFrame, onSelect: (EditorFrame) -> Unit) {
-    val palette = LocalAppTheme.current.palette
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        EditorFrame.entries.forEach { option ->
-            val isSelected = option == selected
-            Column(
-                modifier = Modifier
-                    .width(66.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable(onClick = { onSelect(option) })
-                    .padding(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Canvas(
-                    modifier = Modifier
-                        .size(54.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .then(
-                            if (isSelected) {
-                                Modifier.border(2.dp, palette.accent, RoundedCornerShape(10.dp))
-                            } else {
-                                Modifier
-                            }
-                        )
-                ) {
-                    drawRect(Color(0xFF8D939C))
-                    drawEditorFrame(option, Rect(Offset.Zero, size))
-                }
-                Spacer(modifier = Modifier.height(5.dp))
-                Text(
-                    text = frameLabel(option),
-                    color = if (isSelected) palette.accent else palette.onBackground,
-                    fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-private fun frameLabel(frame: EditorFrame): String = when (frame) {
-    EditorFrame.None -> strings.frameNone
-    EditorFrame.White -> strings.frameWhite
-    EditorFrame.Black -> strings.frameBlack
-    EditorFrame.DoubleLine -> strings.frameDouble
-    EditorFrame.Polaroid -> strings.framePolaroid
 }
 
 /** The crop ratios as a horizontally scrollable row of One UI chips below the photo. */

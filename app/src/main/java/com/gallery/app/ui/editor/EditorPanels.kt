@@ -35,6 +35,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -269,10 +271,12 @@ internal fun FilterPanel(
     filters: List<EditorFilter>,
     selected: EditorFilter,
     bokeh: Boolean,
+    frame: EditorFrame,
     enabled: Boolean,
     matrixFor: (EditorFilter) -> FloatArray,
     onSelect: (EditorFilter) -> Unit,
-    onToggleBokeh: (Boolean) -> Unit
+    onToggleBokeh: (Boolean) -> Unit,
+    onSelectFrame: (EditorFrame) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -353,7 +357,68 @@ internal fun FilterPanel(
                 }
             }
         }
+
+        // Frames live with the other whole-photo looks, not in the crop tools.
+        Text(
+            text = strings.frame,
+            color = palette.onBackground,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 22.dp, top = 2.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            EditorFrame.entries.forEach { option ->
+                val isSelected = option == frame
+                Column(
+                    modifier = Modifier
+                        .width(66.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(enabled = enabled) { onSelectFrame(option) }
+                        .padding(4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Canvas(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (isSelected) {
+                                    Modifier.border(2.dp, palette.accent, RoundedCornerShape(10.dp))
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    ) {
+                        drawRect(Color(0xFF8D939C))
+                        drawEditorFrame(option, Rect(Offset.Zero, size))
+                    }
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Text(
+                        text = frameLabel(option),
+                        color = if (isSelected) palette.accent else palette.onBackground,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
     }
+}
+
+private fun frameLabel(frame: EditorFrame): String = when (frame) {
+    EditorFrame.None -> strings.frameNone
+    EditorFrame.White -> strings.frameWhite
+    EditorFrame.Black -> strings.frameBlack
+    EditorFrame.DoubleLine -> strings.frameDouble
+    EditorFrame.Polaroid -> strings.framePolaroid
 }
 
 /** One One UI segmented switch shared by the tool and blur-shape rows. */
