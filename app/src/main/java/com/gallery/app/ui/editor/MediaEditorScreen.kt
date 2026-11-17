@@ -121,9 +121,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -266,6 +268,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var selectedTextId by remember { mutableStateOf<Long?>(null) }
     // The writing bar only shows while a label is actually being edited, not on a plain selection.
     var textBarOpen by remember { mutableStateOf(false) }
+    // The field's text plus its caret, so opening an existing label puts the caret after its text.
+    var textField by remember { mutableStateOf(TextFieldValue("")) }
     // Set when a box is created blank; the first typed character turns it into one undo step.
     var pendingTextCreate by remember { mutableStateOf<EditorSnapshot?>(null) }
     // Bumped whenever a fresh box should raise the keyboard in the text panel.
@@ -785,6 +789,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         textOverlays = textOverlays + overlay
         selectedTextId = overlay.id
         textBarOpen = true
+        textField = TextFieldValue("")
         // A tap on the photo should raise the keyboard; typing into an empty panel already has it.
         if (focus) textFocusToken += 1
     }
@@ -1401,6 +1406,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                             previousSelection == selectedTextId
                                         if (tappedSelectedBox) {
                                             textBarOpen = true
+                                            selectedText()?.let { overlay ->
+                                                textField = TextFieldValue(
+                                                    overlay.text,
+                                                    TextRange(overlay.text.length)
+                                                )
+                                            }
                                             textFocusToken += 1
                                         } else if (bodyGrab) {
                                             // Selecting a different box closes the bar; a second tap
@@ -1922,6 +1933,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 keyboardController?.show()
             }
 
+            // Opening the bar always starts after the existing text, never at the beginning.
+            LaunchedEffect(textBarOpen, selectedTextId) {
+                if (!textBarOpen) return@LaunchedEffect
+                val text = selectedText()?.text.orEmpty()
+                textField = TextFieldValue(text, TextRange(text.length))
+            }
+
             when (tab) {
                 EditorTab.Crop -> {
                     AnimatedVisibility(
@@ -2070,6 +2088,22 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             )
         }
 
+        // While the writing bar is open it is the only control. A transparent layer swallows every
+        // touch outside the bar, so a stray tap cannot select, move or paint on the photo behind it.
+        if (tab == EditorTab.Text && textBarOpen && selectedText() != null && !saving) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                awaitPointerEvent().changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+            )
+        }
+
         // The writing bar is a free-floating overlay: it rides above the keyboard while typing and
         // drops to the bottom of the page, still floating over the editor, when the keyboard hides.
         AnimatedVisibility(
@@ -2082,10 +2116,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
         ) {
             TextEntryBar(
-                value = selectedText()?.text ?: "",
+                value = textField,
                 enabled = !saving,
                 focusRequester = textFocusRequester,
-                onValueChange = ::changeText,
+                onValueChange = { field ->
+                    textField = field
+                    changeText(field.text)
+                },
                 onDone = ::finishTextEdit
             )
         }
@@ -2727,10 +2764,10 @@ private fun CompareButton(
  */
 @Composable
 private fun TextEntryBar(
-    value: String,
+    value: TextFieldValue,
     enabled: Boolean,
     focusRequester: FocusRequester,
-    onValueChange: (String) -> Unit,
+    onValueChange: (TextFieldValue) -> Unit,
     onDone: () -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
@@ -2756,7 +2793,7 @@ private fun TextEntryBar(
             keyboardActions = KeyboardActions(onDone = { onDone() }),
             decorationBox = { field ->
                 Box {
-                    if (value.isEmpty()) {
+                    if (value.text.isEmpty()) {
                         Text(
                             text = strings.textPlaceholder,
                             color = palette.textMuted,
