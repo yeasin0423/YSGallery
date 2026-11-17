@@ -283,6 +283,10 @@ private fun GeneralContent(
     ChoiceCard(listOf(5, 10, 15, 30), videoSeekSeconds, { strings.secondsLabel(it) }) { onSetVideoSeekSeconds(it) }
     Footer(strings.seekDurationDescription)
 
+    // Gesture guidance lives here instead of taking space in the Text panel.
+    Header(strings.textEditing)
+    Paragraph(strings.textTapHint)
+
     if (canManageAllFiles) {
         Header(strings.permissions)
         Card {

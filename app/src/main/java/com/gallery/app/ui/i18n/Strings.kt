@@ -80,6 +80,7 @@ interface AppStrings {
     val brush: String
     val text: String
     val textTapHint: String
+    val textEditing: String
     val textSize: String
     val textPlaceholder: String
     val fontBold: String
@@ -436,6 +437,7 @@ object EnglishStrings : AppStrings {
     override val brush = "Brush"
     override val text = "Text"
     override val textTapHint = "Tap the photo to add a box and start typing. Tap a box to select it, tap it again to edit, drag to move it, use a corner to resize and the knob to rotate."
+    override val textEditing = "Text in the editor"
     override val textSize = "Text size"
     override val textPlaceholder = "Type your text"
     override val fontBold = "Bold"

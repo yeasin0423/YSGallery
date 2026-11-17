@@ -692,12 +692,6 @@ internal fun TextPanel(
             ),
             modifier = Modifier.padding(horizontal = 14.dp)
         )
-        Text(
-            text = strings.textTapHint,
-            color = palette.textMuted,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 2.dp)
-        )
     }
 }
 
