@@ -109,7 +109,9 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
 - Launcher icons are adaptive: `res/mipmap-anydpi-v26/ic_launcher*.xml` use the solid pink
   `@color/ic_launcher_background` plus `@mipmap/ic_launcher_foreground`, all rendered from the
   repository's `latest.svg`. The legacy squircle PNGs in `res/mipmap-*dpi/` stay as fallbacks. The
-  adaptive background is what keeps launchers from drawing a white plate around the artwork.
+  adaptive background is what keeps launchers from drawing a white plate around the artwork. The
+  foreground art is centred at two thirds of the 108dp layer: the 72dp mask then shows the artwork at
+  its natural size instead of zooming it to the layer bounds.
 - The settings hub shows only section titles. Counts, storage summaries and version numbers belong on
   the pushed pages, not in the list rows.
 - Legacy `amoled_gallery_*` SharedPreferences names are kept intentionally so existing settings survive.
