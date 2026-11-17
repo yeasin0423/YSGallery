@@ -24,10 +24,10 @@ photo editor and trimmed to a single design language (One UI) and a single langu
 The editor opens from any photo (videos and GIFs are intentionally not editable yet) and works in
 five tabs:
 
-- **Crop** – free or fixed ratios, rotate a quarter turn either way, mirror horizontally or vertically,
-  and a frame picker (white, black, double line, polaroid)
+- **Crop** – free or fixed ratios, rotate a quarter turn either way, mirror horizontally or vertically
 - **Adjust** – brightness, contrast, saturation, warmth, tint, black point, white point and highlights
-- **Filters** – 21 live presets, plus a Bokeh switch that lays soft out-of-focus lights over the photo
+- **Filters** – 27 live presets, including retro film and tape looks, a Bokeh switch that lays soft
+  out-of-focus lights over the photo, and frames (white, black, double line, polaroid)
 - **Draw** – brush, eraser, blur brush and mosaic brush, sharing one width slider, with stroke or
   circular patch shapes
 - **Text** – multiple draggable, resizable, rotatable labels in six font styles, typed in a floating

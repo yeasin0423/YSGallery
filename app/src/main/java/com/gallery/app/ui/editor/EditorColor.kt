@@ -265,6 +265,61 @@ val EditorFilters: List<EditorFilter> = listOf(
             0f, 0f, 48f, 0f, -831f,
             0f, 0f, 0f, 1f, 0f
         )
+    ),
+    // Retro looks: analogue tape and film colour, kept as plain matrices so preview and export match.
+    EditorFilter(
+        "vhs", "VHS",
+        floatArrayOf(
+            0.92f, 0.12f, 0.05f, 0f, 14f,
+            0.02f, 0.88f, 0.06f, 0f, 6f,
+            0.08f, 0.10f, 0.95f, 0f, 22f,
+            0f, 0f, 0f, 1f, 0f
+        )
+    ),
+    EditorFilter(
+        "kodachrome", "Kodachrome",
+        floatArrayOf(
+            1.26f, 0.05f, 0f, 0f, -18f,
+            0f, 1.10f, 0.04f, 0f, -10f,
+            0f, 0.02f, 0.92f, 0f, 10f,
+            0f, 0f, 0f, 1f, 0f
+        )
+    ),
+    EditorFilter(
+        "faded35", "Faded 35mm",
+        floatArrayOf(
+            0.86f, 0.06f, 0.02f, 0f, 26f,
+            0.04f, 0.86f, 0.02f, 0f, 22f,
+            0.03f, 0.05f, 0.86f, 0f, 18f,
+            0f, 0f, 0f, 1f, 0f
+        )
+    ),
+    EditorFilter(
+        "neon", "Neon Nights",
+        floatArrayOf(
+            1.10f, 0f, 0.26f, 0f, -12f,
+            0f, 0.94f, 0.16f, 0f, 2f,
+            0.30f, 0f, 1.16f, 0f, -4f,
+            0f, 0f, 0f, 1f, 0f
+        )
+    ),
+    EditorFilter(
+        "polaroid", "Polaroid",
+        floatArrayOf(
+            1.04f, 0.03f, 0.12f, 0f, 12f,
+            0.03f, 1.00f, 0.06f, 0f, 14f,
+            0.05f, 0.02f, 0.90f, 0f, 20f,
+            0f, 0f, 0f, 1f, 0f
+        )
+    ),
+    EditorFilter(
+        "goldenhour", "Golden Hour",
+        floatArrayOf(
+            1.14f, 0.08f, 0f, 0f, 12f,
+            0.02f, 1.02f, 0.03f, 0f, 8f,
+            0f, 0.04f, 0.82f, 0f, 14f,
+            0f, 0f, 0f, 1f, 0f
+        )
     )
 )
 
