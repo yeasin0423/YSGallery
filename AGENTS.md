@@ -69,7 +69,10 @@ reproduced by the exporter, in this order:
   carry them along.
 - The before/after original is the current frame with adjustments, filters, bokeh, ink, patches,
   labels and the frame removed; rotation/mirror stay so both halves line up.
-- Text is typed in the floating writing bar, not inside the box; the tick finishes the edit.
+- Text is typed in the floating writing bar, not inside the box; the tick finishes the edit. The bar
+  is an overlay above the keyboard, so the editor never resizes. The first tap on a label only selects
+  it (and a drag moves it straight away); a second tap opens the bar. A newly created box opens it at
+  once.
 - Selecting a lead photo opens the editor through `MediaDetailScreen`; closing it with unsaved changes
   must go through `requestClose`.
 

@@ -261,6 +261,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var toolCursor by remember { mutableStateOf<Offset?>(null) }
     var textOverlays by remember { mutableStateOf<List<TextOverlay>>(emptyList()) }
     var selectedTextId by remember { mutableStateOf<Long?>(null) }
+    // The writing bar only shows while a label is actually being edited, not on a plain selection.
+    var textBarOpen by remember { mutableStateOf(false) }
     // Set when a box is created blank; the first typed character turns it into one undo step.
     var pendingTextCreate by remember { mutableStateOf<EditorSnapshot?>(null) }
     // Bumped whenever a fresh box should raise the keyboard in the text panel.
@@ -559,6 +561,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         toolCursor = null
         textOverlays = emptyList()
         selectedTextId = null
+        textBarOpen = false
         pendingTextCreate = null
         drawMode = DrawMode.Brush
         blurShape = BlurShape.Stroke
@@ -761,6 +764,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     fun finishTextEdit() {
         discardBlankText()
         selectedTextId = null
+        textBarOpen = false
         keyboardController?.hide()
     }
 
@@ -777,6 +781,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         val overlay = createTextOverlay("", center, textColor, textSize, textFont)
         textOverlays = textOverlays + overlay
         selectedTextId = overlay.id
+        textBarOpen = true
         // A tap on the photo should raise the keyboard; typing into an empty panel already has it.
         if (focus) textFocusToken += 1
     }
@@ -789,7 +794,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     fun deleteText(overlay: TextOverlay) {
         if (overlay.text.isNotBlank()) pushHistory()
         textOverlays = textOverlays.filterNot { it.id == overlay.id }
-        if (selectedTextId == overlay.id) selectedTextId = null
+        if (selectedTextId == overlay.id) {
+            selectedTextId = null
+            textBarOpen = false
+        }
         pendingTextCreate = null
     }
 
@@ -1365,7 +1373,15 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                         val tappedSelectedBox = bodyGrab && !moved &&
                                             previousSelection != null &&
                                             previousSelection == selectedTextId
-                                        if (tappedSelectedBox) textFocusToken += 1
+                                        if (tappedSelectedBox) {
+                                            textBarOpen = true
+                                            textFocusToken += 1
+                                        } else if (bodyGrab) {
+                                            // Selecting a different box closes the bar; a second tap
+                                            // on it opens the bar again.
+                                            textBarOpen = false
+                                            keyboardController?.hide()
+                                        }
                                     } else if (!handled && !transformed && !moved &&
                                         rect.contains(down.position)
                                     ) {
@@ -2012,6 +2028,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     if (tab == EditorTab.Text && selected != EditorTab.Text) {
                         discardBlankText()
                         selectedTextId = null
+                        textBarOpen = false
                     }
                     tab = selected
                     openPanel = EditorPanel.None
@@ -2030,7 +2047,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         // The writing bar is an overlay: it rides above the keyboard without shrinking the editor,
         // and sits just above the section pills when the keyboard is closed.
         AnimatedVisibility(
-            visible = tab == EditorTab.Text && selectedText() != null && !saving,
+            visible = tab == EditorTab.Text && selectedText() != null && textBarOpen && !saving,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(if (imeVisible) WindowInsets.ime else WindowInsets.navigationBars)
