@@ -349,7 +349,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
     val mosaicPaint = remember(colorMatrix) {
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // No filtering and no anti-aliasing: every pixel of the tiny copy becomes a hard square.
+        Paint().apply {
+            isFilterBitmap = false
+            isAntiAlias = false
             colorFilter = ColorMatrixColorFilter(colorMatrix)
         }
     }

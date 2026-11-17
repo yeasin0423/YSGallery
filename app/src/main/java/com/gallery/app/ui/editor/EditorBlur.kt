@@ -60,9 +60,10 @@ fun blurredBitmap(source: Bitmap): Bitmap {
 
 /**
  * The shortest side a mosaic copy is reduced to. Stretching it back with bitmap filtering off turns
- * every source pixel into one flat square, so the shortest side is also the block count.
+ * every source pixel into one flat square, so the shortest side is also the block count. Eighteen
+ * blocks across the shorter side are chunky enough to read as squares rather than as soft noise.
  */
-private const val MosaicTargetSide = 34
+private const val MosaicTargetSide = 18
 
 /** A pixelated copy of [source]: tiny and drawn stretched with filtering off. */
 fun pixelatedBitmap(source: Bitmap): Bitmap {
