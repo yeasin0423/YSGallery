@@ -435,7 +435,7 @@ object EnglishStrings : AppStrings {
     override val circle = "Circle"
     override val brush = "Brush"
     override val text = "Text"
-    override val textTapHint = "Tap the photo to add a box, then type in the bar above the tabs. Drag a corner to resize, the knob to rotate, the × to remove."
+    override val textTapHint = "Tap the photo to add a box and start typing. Tap a box to select it, tap it again to edit, drag to move it, use a corner to resize and the knob to rotate."
     override val textSize = "Text size"
     override val textPlaceholder = "Type your text"
     override val fontBold = "Bold"

@@ -1321,6 +1321,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     val down = awaitFirstDown(requireUnconsumed = false)
                                     val rect = liveImageRect.value
                                     val tapSlop = 8.dp.toPx()
+                                    // Remembered so a tap on an already-selected box can open the
+                                    // writing bar while a first tap only selects it.
+                                    val previousSelection = selectedTextId
                                     // A delete fires here and leaves no gesture behind.
                                     val handled = beginTextGesture(down.position, rect)
                                     var active = textGesture != null
@@ -1357,9 +1360,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     }
                                     if (active) {
                                         finishTextGesture()
-                                        // Tapping the label (rather than dragging it) opens the
-                                        // writing bar's keyboard; a drag only selects the box.
-                                        if (bodyGrab && !moved) textFocusToken += 1
+                                        // The first tap selects a box (so it can be dragged straight
+                                        // away); tapping it again, once selected, opens the writing bar.
+                                        val tappedSelectedBox = bodyGrab && !moved &&
+                                            previousSelection != null &&
+                                            previousSelection == selectedTextId
+                                        if (tappedSelectedBox) textFocusToken += 1
                                     } else if (!handled && !transformed && !moved &&
                                         rect.contains(down.position)
                                     ) {
