@@ -466,7 +466,7 @@ object MediaEditor {
 
     /**
      * Wraps [source] in [frame]: a border on every side plus, for a polaroid, a wider strip under the
-     * photo. The double frame adds a thin rule just inside the border.
+     * photo. A frame with a line colour adds a thin rule just inside the border.
      */
     private fun applyFrame(source: Bitmap, frame: EditorFrame): Bitmap {
         val shorter = min(source.width, source.height).toFloat()
@@ -480,7 +480,7 @@ object MediaEditor {
         val canvas = Canvas(output)
         canvas.drawColor(frame.background.toArgb())
         canvas.drawBitmap(source, border.toFloat(), border.toFloat(), null)
-        frame.innerLine?.let { line ->
+        frame.lineColor?.let { line ->
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = line.toArgb()
                 style = Paint.Style.STROKE

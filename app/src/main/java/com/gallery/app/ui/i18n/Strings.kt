@@ -67,6 +67,11 @@ interface AppStrings {
     val frameBlack: String
     val frameDouble: String
     val framePolaroid: String
+    val frameGold: String
+    val frameModern: String
+    val frameVintage: String
+    val framePolaroidBlack: String
+    val frameCinema: String
     val crop: String
     val adjust: String
     val filters: String
@@ -430,6 +435,11 @@ object EnglishStrings : AppStrings {
     override val frameBlack = "Black"
     override val frameDouble = "Double line"
     override val framePolaroid = "Polaroid"
+    override val frameGold = "Gold"
+    override val frameModern = "Modern"
+    override val frameVintage = "Vintage"
+    override val framePolaroidBlack = "Black polaroid"
+    override val frameCinema = "Cinema"
     override val crop = "Crop"
     override val adjust = "Adjust"
     override val filters = "Filters"

@@ -19,13 +19,20 @@ import kotlin.math.min
 enum class EditorFrame(
     val background: Color,
     val borderFraction: Float,
-    val extraBottomFraction: Float = 0f
+    val extraBottomFraction: Float = 0f,
+    /** The thin rule drawn just inside the border, or null for a flat frame. */
+    val lineColor: Color? = null
 ) {
     None(Color.Transparent, 0f),
     White(Color.White, 0.035f),
     Black(Color.Black, 0.035f),
-    DoubleLine(Color.White, 0.05f),
-    Polaroid(Color.White, 0.04f, 0.16f)
+    DoubleLine(Color.White, 0.05f, lineColor = Color(0xFF303030)),
+    Polaroid(Color.White, 0.04f, 0.16f),
+    Gold(Color(0xFFF5E6C8), 0.05f, lineColor = Color(0xFFB08948)),
+    Modern(Color(0xFF101010), 0.045f, lineColor = Color(0xFFF4F1EA)),
+    Vintage(Color(0xFFF1E6D2), 0.055f, lineColor = Color(0xFF9A7350)),
+    PolaroidBlack(Color(0xFF141414), 0.04f, 0.16f),
+    Cinema(Color(0xFF0A0A0A), 0.06f, lineColor = Color(0xFFD8B25A))
 }
 
 /** Border thickness in pixels of a photo whose shorter side is [shorter]. */
@@ -33,10 +40,6 @@ fun EditorFrame.borderPx(shorter: Float): Float = shorter * borderFraction
 
 /** The extra strip a polaroid leaves under the photo, in pixels of the same scale. */
 fun EditorFrame.extraBottomPx(shorter: Float): Float = shorter * extraBottomFraction
-
-/** The thin rule of the double frame, or null for the flat frames. */
-val EditorFrame.innerLine: Color?
-    get() = if (this == EditorFrame.DoubleLine) Color(0xFF303030) else null
 
 /**
  * Paints the frame inside [bounds] for the live preview: four strips along the edges, plus the thin
@@ -64,7 +67,7 @@ fun DrawScope.drawEditorFrame(frame: EditorFrame, bounds: Rect) {
         topLeft = Offset(bounds.right - border, bounds.top + border),
         size = Size(border, middleHeight)
     )
-    frame.innerLine?.let { line ->
+    frame.lineColor?.let { line ->
         val inset = border * 0.45f
         drawRect(
             color = line,
