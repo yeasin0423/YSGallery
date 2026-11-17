@@ -264,6 +264,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var textFocusToken by remember { mutableIntStateOf(0) }
     var textColor by remember { mutableStateOf(Color.White) }
     var textSize by remember { mutableFloatStateOf(DefaultTextSize) }
+    // The snapshot before a size-slider drag, so the whole drag is one undo step.
+    var textSizeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textFont by remember { mutableStateOf(TextFont.Bold) }
     var saving by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -769,10 +771,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     fun createText(center: Offset, focus: Boolean = true) {
         discardBlankText()
         pendingTextCreate = snapshot()
-        val overlay = createTextOverlay("", center, textColor, DefaultTextSize, textFont)
+        val overlay = createTextOverlay("", center, textColor, textSize, textFont)
         textOverlays = textOverlays + overlay
         selectedTextId = overlay.id
-        textSize = DefaultTextSize
         // A tap on the photo should raise the keyboard; typing into an empty panel already has it.
         if (focus) textFocusToken += 1
     }
@@ -938,6 +939,24 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             pushHistory()
         }
         replaceText(overlay.id) { it.copy(color = color) }
+    }
+
+    /** Resizes the selected label live; the slider commits one undo step when released. */
+    fun chooseTextSize(size: Float) {
+        textSize = size
+        val overlay = selectedText() ?: return
+        if (abs(overlay.size - size) < 0.0005f) return
+        if (textSizeGestureStart == null) {
+            textSizeGestureStart =
+                if (overlay.text.isBlank() && pendingTextCreate != null) pendingTextCreate else snapshot()
+        }
+        if (overlay.text.isBlank() && pendingTextCreate != null) pendingTextCreate = null
+        replaceText(overlay.id) { it.copy(size = size) }
+    }
+
+    fun finishTextSize() {
+        textSizeGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+        textSizeGestureStart = null
     }
 
     /** Applies a font style to the selected label, or remembers it for the next one. */
@@ -1967,9 +1986,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 EditorTab.Text -> TextPanel(
                     color = selectedText()?.color ?: textColor,
                     font = selectedText()?.font ?: textFont,
+                    size = selectedText()?.size ?: textSize,
                     enabled = !saving && preview != null,
                     onSelectColor = ::chooseTextColor,
-                    onSelectFont = ::chooseTextFont
+                    onSelectFont = ::chooseTextFont,
+                    onSizeChange = ::chooseTextSize,
+                    onSizeChangeFinished = ::finishTextSize
                 )
             }
 

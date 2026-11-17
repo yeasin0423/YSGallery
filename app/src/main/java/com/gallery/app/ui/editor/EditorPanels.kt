@@ -615,9 +615,12 @@ internal fun DrawPanel(
 internal fun TextPanel(
     color: Color,
     font: TextFont,
+    size: Float,
     enabled: Boolean,
     onSelectColor: (Color) -> Unit,
-    onSelectFont: (TextFont) -> Unit
+    onSelectFont: (TextFont) -> Unit,
+    onSizeChange: (Float) -> Unit,
+    onSizeChangeFinished: () -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Column(
@@ -643,11 +646,45 @@ internal fun TextPanel(
                 )
             }
         }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 22.dp, end = 22.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = strings.textSize,
+                color = palette.onBackground,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${(size * 100f).roundToInt()}%",
+                color = palette.textMuted,
+                fontSize = 12.sp
+            )
+        }
+        Slider(
+            value = size,
+            onValueChange = onSizeChange,
+            onValueChangeFinished = onSizeChangeFinished,
+            valueRange = MinTextSize..MaxTextSize,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = palette.accent,
+                activeTrackColor = palette.accent,
+                inactiveTrackColor = palette.surfaceVariant,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent
+            ),
+            modifier = Modifier.padding(horizontal = 14.dp)
+        )
         Text(
             text = strings.textTapHint,
             color = palette.textMuted,
             fontSize = 12.sp,
-            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 10.dp)
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 2.dp)
         )
     }
 }
