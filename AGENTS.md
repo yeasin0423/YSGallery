@@ -12,6 +12,11 @@ The UI is **Samsung One UI styling only** and **English only**. The upstream pro
 languages (Samsung One UI, Google Gemini, iOS Liquid Glass, Xiaomi HyperOS) and English/German strings;
 this fork intentionally keeps only One UI and English.
 
+This fork is built around its photo editor: crop/rotate/mirror, adjust, filters, bokeh, drawing
+(brush, eraser, blur, mosaic), text labels with fonts, frames, before/after comparison and a
+floating text bar. Videos and GIFs are intentionally not editable (`MediaItem.isImage` gates the entry
+point); do not enable it without a full video pipeline.
+
 ## Repository layout
 
 ```
@@ -29,7 +34,7 @@ this fork intentionally keeps only One UI and English.
 │   │   │   ├── ui/
 │   │   │   │   ├── components/         # shared composables (bars, sheets, grid items)
 │   │   │   │   ├── design/             # design-system primitives, motion, overlays
-│   │   │   │   ├── editor/             # photo/video editor
+│   │   │   │   ├── editor/             # photo editor (see below)
 │   │   │   │   ├── i18n/Strings.kt     # English strings (only language)
 │   │   │   │   ├── screens/            # feature screens + One UI settings pages
 │   │   │   │   ├── theme/              # palettes, shapes, ThemeState
@@ -43,6 +48,30 @@ this fork intentionally keeps only One UI and English.
 ├── fastlane/metadata/android/en-US/   # store listing (English only)
 └── .github/workflows/build-release.yml
 ```
+
+## Editor structure
+
+`ui/editor/MediaEditorScreen.kt` holds the screen state, gestures, preview canvas and tool panels;
+`MediaEditor.kt` holds loading, decoding and the export pipeline. Everything the preview draws must be
+reproduced by the exporter, in this order:
+
+1. mirror, rotate, crop
+2. colour matrix (adjustments combined with the filter)
+3. blur and mosaic patches (`EditorBlur.kt`)
+4. bokeh lights (`EditorBokeh.kt`)
+5. freehand strokes (`EditorDraw.kt`)
+6. text labels (`EditorText.kt`)
+7. frame (`EditorFrame.kt`)
+
+- `EditSpec` is the single source of truth passed to `saveImage`/`saveVideo`; add new effects there and
+  in `EditorSnapshot` (undo), `applySnapshot`, `reset` and the `changed` check.
+- Strokes, labels, patches and orbs store normalized coordinates so rotation, mirroring and cropping
+  carry them along.
+- The before/after original is the current frame with adjustments, filters, bokeh, ink, patches,
+  labels and the frame removed; rotation/mirror stay so both halves line up.
+- Text is typed in the floating writing bar, not inside the box; the tick finishes the edit.
+- Selecting a lead photo opens the editor through `MediaDetailScreen`; closing it with unsaved changes
+  must go through `requestClose`.
 
 ## Build and verification
 
@@ -74,6 +103,11 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
   always returns `EnglishStrings`. Do not reintroduce a language picker or `GermanStrings`.
 - The manifest has a single launcher alias, `.LauncherOneUi`. `LauncherIcon.apply` also disables the old
   Gemini/iOS/HyperOS aliases from previous builds.
+- Launcher icons are plain PNGs in `res/mipmap-*dpi/` (`ic_launcher`, `ic_launcher_oneui`) rendered from
+  the repository's `latest.svg`. There are no adaptive-icon XMLs; keep it that way unless the artwork
+  is reworked into separate background/foreground layers.
+- The settings hub shows only section titles. Counts, storage summaries and version numbers belong on
+  the pushed pages, not in the list rows.
 - Legacy `amoled_gallery_*` SharedPreferences names are kept intentionally so existing settings survive.
 - Internal names `AmoledBlack` and `AmoledVideoPlayer` remain for historical reasons; renaming them is
   optional churn.
@@ -82,6 +116,8 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
 
 - **Bump the version on every commit.** Increase `versionCode` by 1 and update `versionName` in
   `app/build.gradle.kts` with each change that is committed, so every build is distinguishable.
+- Keep changes split into focused commits; the owner builds each one on CI so a regression is easy to
+  bisect.
 - Match the surrounding Compose style (4-space indent, trailing commas, one composable per concern).
 - Read user-facing text from `strings` / `AppStrings`; do not hardcode UI strings in composables.
 - Keep the One UI look: AMOLED black background, compact top titles, floating frosted bars, grouped
@@ -89,9 +125,13 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
 - All Kotlin files live under `app/src/main/java/com/gallery/app/` and their `package` line must match
   the directory.
 - Do not commit `keystore.properties`, signing keys, `local.properties` or build output.
+- Saving defaults to a copy; overwriting the original must stay behind an explicit confirmation.
 
 ## Testing notes
 
-- There are no unit/instrumentation tests in this fork; CI compilation is the primary gate.
+- There are no unit/instrumentation tests in this fork; CI compilation is the primary gate, followed by
+  manual installs of the artifact.
 - When changing resources, verify `R.*` references still resolve and that removed drawables/mipmaps are
   not referenced from the manifest or Kotlin.
+- For editor changes, check both the live preview and the exported file; a mismatch usually means the
+  preview and `MediaEditor.renderImage` drifted apart.
