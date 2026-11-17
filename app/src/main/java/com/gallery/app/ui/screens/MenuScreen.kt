@@ -1,5 +1,4 @@
 package com.gallery.app.ui.screens
-import com.gallery.app.ui.i18n.LanguageState
 import com.gallery.app.ui.i18n.strings
 
 import androidx.compose.foundation.background
@@ -108,11 +107,6 @@ fun MenuScreen(
     val theme = LocalAppTheme.current
     val palette = theme.palette
 
-    val storageText = if (internalTotalBytes > 0) {
-        strings.freeOf(formatBytes(internalFreeBytes), formatBytes(internalTotalBytes))
-    } else {
-        strings.unknown
-    }
     // Each entry is pushed as its own page, like Samsung Settings.
     var page by remember { mutableStateOf<SettingsSection?>(null) }
     val openSection: (SettingsSection) -> Unit = { page = it }
@@ -158,10 +152,6 @@ fun MenuScreen(
                 ) {
                     // Samsung Settings' grouped cards with coloured circle icons.
                     OneUiMenuContent(
-                        favoriteCount = favoriteCount,
-                        trashedCount = trashedCount,
-                        storageValue = storageText,
-                        appVersionName = appVersionName,
                         onOpenFavorites = onOpenFavorites,
                         onOpenTrash = onOpenTrash,
                         onOpenDesign = openDesign,
@@ -424,9 +414,3 @@ internal fun graphicsQualityLabel(tier: PerformanceProfile): String = when (tier
 }
 
 private fun graphicsQualityDescription(tier: PerformanceProfile): String = strings.qualityDescription(tier)
-
-private fun formatBytes(bytes: Long): String {
-    val gb = bytes / (1024.0 * 1024.0 * 1024.0)
-    // App language decides the decimal separator (1,5 GB / 1.5 GB), like every other text.
-    return String.format(LanguageState.locale, "%.1f GB", gb)
-}

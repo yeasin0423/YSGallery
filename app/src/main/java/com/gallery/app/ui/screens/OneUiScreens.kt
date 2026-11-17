@@ -74,10 +74,6 @@ import com.gallery.app.ui.theme.presetsFor
 
 @Composable
 internal fun OneUiMenuContent(
-    favoriteCount: Int,
-    trashedCount: Int,
-    storageValue: String?,
-    appVersionName: String,
     onOpenFavorites: () -> Unit,
     onOpenTrash: () -> Unit,
     onOpenDesign: () -> Unit,
@@ -87,25 +83,25 @@ internal fun OneUiMenuContent(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Card {
-            IconRow(Icons.Rounded.Favorite, Color(0xFFF2586E), strings.favorites, strings.items(favoriteCount), onOpenFavorites)
+            IconRow(Icons.Rounded.Favorite, Color(0xFFF2586E), strings.favorites, onOpenFavorites)
             Divider(start = 78.dp)
-            IconRow(Icons.Rounded.Delete, Color(0xFFF4731F), strings.trash, strings.items(trashedCount), onOpenTrash)
+            IconRow(Icons.Rounded.Delete, Color(0xFFF4731F), strings.trash, onOpenTrash)
         }
         Card {
-            IconRow(Icons.Rounded.Palette, Color(0xFF7B61F0), strings.appearance, ThemeState.designLanguage.displayName, onOpenDesign)
+            IconRow(Icons.Rounded.Palette, Color(0xFF7B61F0), strings.appearance, onOpenDesign)
             Divider(start = 78.dp)
-            IconRow(Icons.Rounded.Settings, Color(0xFF3E7BFA), strings.general, strings.graphicsAndVideo, onOpenSettings)
+            IconRow(Icons.Rounded.Settings, Color(0xFF3E7BFA), strings.general, onOpenSettings)
         }
         Card {
-            IconRow(Icons.Rounded.Storage, Color(0xFF4CC34F), strings.storage, storageValue, onOpenStorage)
+            IconRow(Icons.Rounded.Storage, Color(0xFF4CC34F), strings.storage, onOpenStorage)
             Divider(start = 78.dp)
-            IconRow(Icons.Rounded.Info, Color(0xFF8E8E93), strings.info, appVersionName.ifBlank { null }, onOpenInfo)
+            IconRow(Icons.Rounded.Info, Color(0xFF8E8E93), strings.info, onOpenInfo)
         }
     }
 }
 
 @Composable
-private fun IconRow(icon: ImageVector, color: Color, title: String, subtitle: String?, onClick: () -> Unit) {
+private fun IconRow(icon: ImageVector, color: Color, title: String, onClick: () -> Unit) {
     val palette = LocalAppTheme.current.palette
     Row(
         modifier = Modifier
@@ -124,12 +120,14 @@ private fun IconRow(icon: ImageVector, color: Color, title: String, subtitle: St
             Icon(icon, null, tint = Color.White, modifier = Modifier.size(22.dp))
         }
         Spacer(modifier = Modifier.width(18.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = palette.onBackground, fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle != null) {
-                Text(subtitle, color = palette.accent, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
+        Text(
+            text = title,
+            color = palette.onBackground,
+            fontSize = 19.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
