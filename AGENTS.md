@@ -116,6 +116,8 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
 
 - **Bump the version on every commit.** Increase `versionCode` by 1 and update `versionName` in
   `app/build.gradle.kts` with each change that is committed, so every build is distinguishable.
+  The name is the code with a dot before the last digit: 64 is `6.4`, 65 is `6.5`, 77 is `7.7`.
+  Do not use multi-digit minor versions such as `6.12`.
 - Keep changes split into focused commits; the owner builds each one on CI so a regression is easy to
   bisect.
 - Match the surrounding Compose style (4-space indent, trailing commas, one composable per concern).
