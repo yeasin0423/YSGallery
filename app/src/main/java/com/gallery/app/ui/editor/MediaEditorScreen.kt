@@ -8,6 +8,8 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
+import android.os.Build
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -118,6 +120,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -1062,6 +1065,29 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     // A rendered overwrite waiting for the system prompt is deleted if the editor goes away.
     DisposableEffect(Unit) {
         onDispose { pendingOverwrite?.let { MediaEditor.discardOverwrite(it.second) } }
+    }
+
+    // The keyboard must float over the editor, not shrink it. Edge-to-edge alone is not enough: the
+    // window can still follow the IME and resize (which also reports an IME inset of zero), so the
+    // editor asks the window for ADJUST_NOTHING while it is open and puts the previous mode back when
+    // it closes. API 29 derives IME insets from the resized window, so it keeps the default there.
+    val editorView = LocalView.current
+    DisposableEffect(editorView) {
+        val window = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            editorView.context.findActivity()?.window
+        } else {
+            null
+        }
+        val previousMode = window?.attributes?.softInputMode
+        if (window != null && previousMode != null) {
+            window.setSoftInputMode(
+                (previousMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or
+                    WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+            )
+        }
+        onDispose {
+            if (window != null && previousMode != null) window.setSoftInputMode(previousMode)
+        }
     }
 
     BackHandler {
@@ -2761,4 +2787,11 @@ private fun TextEntryBar(
             )
         }
     }
+}
+
+/** The activity that hosts this composition, used to reach its window. */
+private tailrec fun android.content.Context.findActivity(): android.app.Activity? = when (this) {
+    is android.app.Activity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

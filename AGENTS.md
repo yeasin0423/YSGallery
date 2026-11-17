@@ -72,7 +72,8 @@ reproduced by the exporter, in this order:
 - Text is typed in the floating writing bar, not inside the box; the tick finishes the edit. The bar
   is an overlay above the keyboard, so the editor never resizes. The first tap on a label only selects
   it (and a drag moves it straight away); a second tap opens the bar. A newly created box opens it at
-  once.
+  once. While the editor is open the window uses `SOFT_INPUT_ADJUST_NOTHING` (restored on close), which
+  is what stops the system from shrinking the page when the IME appears.
 - Selecting a lead photo opens the editor through `MediaDetailScreen`; closing it with unsaved changes
   must go through `requestClose`.
 
