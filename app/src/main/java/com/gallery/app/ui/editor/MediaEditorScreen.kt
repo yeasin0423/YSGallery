@@ -2044,14 +2044,14 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             )
         }
 
-        // The writing bar is an overlay: it rides above the keyboard without shrinking the editor,
-        // and sits just above the section pills when the keyboard is closed.
+        // The writing bar is a free-floating overlay: it rides above the keyboard while typing and
+        // drops to the bottom of the page, still floating over the editor, when the keyboard hides.
         AnimatedVisibility(
             visible = tab == EditorTab.Text && selectedText() != null && textBarOpen && !saving,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .windowInsetsPadding(if (imeVisible) WindowInsets.ime else WindowInsets.navigationBars)
-                .padding(bottom = if (imeVisible) 6.dp else 62.dp),
+                .padding(bottom = 8.dp),
             enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
             exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
         ) {
