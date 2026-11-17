@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -1112,9 +1113,10 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
 
-    // The keyboard floats over the editor instead of resizing it: the photo keep its size while a
-    // label is typed, and only the writing bar moves up with the keyboard.
-    val imeVisible = WindowInsets.ime.getBottom(density) > 0
+    // The writing bar moves with whichever is taller, the IME or the navigation bar. Using their
+    // union means the bar follows the keyboard animation down and never dips past its final spot
+    // when the keyboard closes; switching between the two insets caused that visible overshoot.
+    val textBarInsets = WindowInsets.ime.union(WindowInsets.navigationBars)
 
     Box(
         modifier = Modifier
@@ -2110,7 +2112,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             visible = tab == EditorTab.Text && selectedText() != null && textBarOpen && !saving,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .windowInsetsPadding(if (imeVisible) WindowInsets.ime else WindowInsets.navigationBars)
+                .windowInsetsPadding(textBarInsets)
                 .padding(bottom = 8.dp),
             enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
             exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
