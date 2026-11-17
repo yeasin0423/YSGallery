@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Compare
 import androidx.compose.material.icons.rounded.Crop
+import androidx.compose.material.icons.rounded.FilterFrames
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Restore
@@ -152,7 +153,7 @@ val LocalOnMediaEdited = staticCompositionLocalOf<() -> Unit> { {} }
 private enum class CropHandle { NONE, MOVE, LEFT, TOP, RIGHT, BOTTOM, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
 /** The inline panel under the preview. Only one is open at a time. */
-private enum class EditorPanel { None, Rotate, Ratio }
+private enum class EditorPanel { None, Rotate, Ratio, Frame }
 
 /** Everything an undo step restores. The selected tab and open panel are UI state, not image state. */
 private data class EditorSnapshot(
@@ -164,6 +165,7 @@ private data class EditorSnapshot(
     val adjustments: EditorAdjustments,
     val filter: EditorFilter,
     val bokeh: Boolean,
+    val frame: EditorFrame,
     val strokes: List<DrawStroke>,
     val blurStrokes: List<BlurStroke>,
     val texts: List<TextOverlay>
@@ -238,6 +240,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var filter by remember { mutableStateOf(EditorFilterNone) }
     // Renders the fixed bokeh orb set over the photo; part of the image, so it is undoable.
     var bokeh by remember { mutableStateOf(false) }
+    var frame by remember { mutableStateOf(EditorFrame.None) }
     var drawColor by remember { mutableStateOf(EditorDrawColors.first()) }
     var drawWidth by remember { mutableFloatStateOf(DefaultDrawWidth) }
     // Every width-slider move bumps this, so a ring shows the real brush/eraser size over the photo.
@@ -351,7 +354,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     }
     val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
             !adjustments.isNeutral || filter.id != EditorFilterNone.id || bokeh ||
-            strokes.isNotEmpty() || blurStrokes.isNotEmpty() ||
+            frame != EditorFrame.None || strokes.isNotEmpty() || blurStrokes.isNotEmpty() ||
             textOverlays.any { it.text.isNotBlank() }
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
     val canUndo = undoStack.isNotEmpty()
@@ -366,6 +369,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = adjustments,
         filter = filter,
         bokeh = bokeh,
+        frame = frame,
         strokes = strokes,
         blurStrokes = blurStrokes,
         texts = textOverlays
@@ -386,6 +390,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = state.adjustments
         filter = state.filter
         bokeh = state.bokeh
+        frame = state.frame
         strokes = state.strokes
         blurStrokes = state.blurStrokes
         // Empty boxes only exist while being typed into; history keeps them out of the way.
@@ -531,6 +536,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         selectedAdjustment = EditorAdjustment.Brightness
         filter = EditorFilterNone
         bokeh = false
+        frame = EditorFrame.None
         strokes = emptyList()
         activeStroke = null
         blurStrokes = emptyList()
@@ -951,6 +957,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             colorMatrix = colorMatrix,
             bokeh = bokeh,
             drawStrokes = strokes,
+            frame = frame,
             blurStrokes = blurStrokes,
             textOverlays = textOverlays
         )
@@ -992,6 +999,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             colorMatrix = colorMatrix,
             bokeh = bokeh,
             drawStrokes = strokes,
+            frame = frame,
             blurStrokes = blurStrokes,
             textOverlays = textOverlays
         )
@@ -1502,6 +1510,11 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             }
                         }
                     }
+                    // The frame covers the photo edges, so it goes on after the ink and labels; the
+                    // selection box is still drawn above it so handles stay grabbable.
+                    if (frame != EditorFrame.None && !compareOpen && !peekOriginal) {
+                        drawEditorFrame(frame, inkBounds)
+                    }
                     // The selection box sits above the clip so an off-crop label can still be grabbed.
                     if (tab == EditorTab.Text) {
                         textOverlays.firstOrNull { it.id == selectedTextId }?.let { overlay ->
@@ -1840,9 +1853,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             panel = shownPanel,
                             enabled = !saving && preview != null,
                             ratio = ratio,
+                            frame = frame,
                             onRotateLeft = { rotate(clockwise = false) },
                             onRotateRight = { rotate(clockwise = true) },
-                            onSelectRatio = ::chooseRatio
+                            onSelectRatio = ::chooseRatio,
+                            onSelectFrame = { chosen ->
+                                if (chosen != frame) {
+                                    pushHistory()
+                                    frame = chosen
+                                }
+                            }
                         )
                     }
 
@@ -1859,7 +1879,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             openPanel = EditorPanel.None
                             mirrorVertically()
                         },
-                        onToggleRatio = { togglePanel(EditorPanel.Ratio) }
+                        onToggleRatio = { togglePanel(EditorPanel.Ratio) },
+                        onToggleFrame = { togglePanel(EditorPanel.Frame) }
                     )
                 }
 
@@ -2240,7 +2261,8 @@ private fun EditorToolbar(
     onToggleRotate: () -> Unit,
     onMirrorHorizontally: () -> Unit,
     onMirrorVertically: () -> Unit,
-    onToggleRatio: () -> Unit
+    onToggleRatio: () -> Unit,
+    onToggleFrame: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -2276,6 +2298,13 @@ private fun EditorToolbar(
             enabled = enabled,
             selected = openPanel == EditorPanel.Ratio
         )
+        ThemedToolItem(
+            icon = Icons.Rounded.FilterFrames,
+            label = strings.frame,
+            onClick = onToggleFrame,
+            enabled = enabled,
+            selected = openPanel == EditorPanel.Frame
+        )
     }
 }
 
@@ -2285,9 +2314,11 @@ private fun EditorInlinePanel(
     panel: EditorPanel,
     enabled: Boolean,
     ratio: CropRatio,
+    frame: EditorFrame,
     onRotateLeft: () -> Unit,
     onRotateRight: () -> Unit,
-    onSelectRatio: (CropRatio) -> Unit
+    onSelectRatio: (CropRatio) -> Unit,
+    onSelectFrame: (EditorFrame) -> Unit
 ) {
     val palette = LocalAppTheme.current.palette
     Box(
@@ -2300,6 +2331,7 @@ private fun EditorInlinePanel(
         when (panel) {
             EditorPanel.Rotate -> RotatePanel(enabled, onRotateLeft, onRotateRight)
             EditorPanel.Ratio -> RatioPicker(ratio, onSelectRatio)
+            EditorPanel.Frame -> FramePicker(frame, onSelectFrame)
             EditorPanel.None -> Unit
         }
     }
@@ -2359,6 +2391,64 @@ private fun PanelAction(
         Spacer(modifier = Modifier.width(8.dp))
         Text(label, color = content, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
+}
+
+/** The frame styles as thumbnails showing the border on a neutral sample. */
+@Composable
+private fun FramePicker(selected: EditorFrame, onSelect: (EditorFrame) -> Unit) {
+    val palette = LocalAppTheme.current.palette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        EditorFrame.entries.forEach { option ->
+            val isSelected = option == selected
+            Column(
+                modifier = Modifier
+                    .width(66.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(onClick = { onSelect(option) })
+                    .padding(4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .then(
+                            if (isSelected) {
+                                Modifier.border(2.dp, palette.accent, RoundedCornerShape(10.dp))
+                            } else {
+                                Modifier
+                            }
+                        )
+                ) {
+                    drawRect(Color(0xFF8D939C))
+                    drawEditorFrame(option, Rect(Offset.Zero, size))
+                }
+                Spacer(modifier = Modifier.height(5.dp))
+                Text(
+                    text = frameLabel(option),
+                    color = if (isSelected) palette.accent else palette.onBackground,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+private fun frameLabel(frame: EditorFrame): String = when (frame) {
+    EditorFrame.None -> strings.frameNone
+    EditorFrame.White -> strings.frameWhite
+    EditorFrame.Black -> strings.frameBlack
+    EditorFrame.DoubleLine -> strings.frameDouble
+    EditorFrame.Polaroid -> strings.framePolaroid
 }
 
 /** The crop ratios as a horizontally scrollable row of One UI chips below the photo. */

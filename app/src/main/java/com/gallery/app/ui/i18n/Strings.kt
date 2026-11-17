@@ -61,6 +61,12 @@ interface AppStrings {
     val ratio3x4: String
     val ratio16x9: String
     val ratio9x16: String
+    val frame: String
+    val frameNone: String
+    val frameWhite: String
+    val frameBlack: String
+    val frameDouble: String
+    val framePolaroid: String
     val crop: String
     val adjust: String
     val filters: String
@@ -407,6 +413,12 @@ object EnglishStrings : AppStrings {
     override val ratio3x4 = "3:4"
     override val ratio16x9 = "16:9"
     override val ratio9x16 = "9:16"
+    override val frame = "Frame"
+    override val frameNone = "None"
+    override val frameWhite = "White"
+    override val frameBlack = "Black"
+    override val frameDouble = "Double line"
+    override val framePolaroid = "Polaroid"
     override val crop = "Crop"
     override val adjust = "Adjust"
     override val filters = "Filters"

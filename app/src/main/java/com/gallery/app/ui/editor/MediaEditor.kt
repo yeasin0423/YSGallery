@@ -77,7 +77,7 @@ data class NormalizedRect(val left: Float, val top: Float, val right: Float, val
  * An edit: mirror first ([flipHorizontal]/[flipVertical] on the source frame), then rotate clockwise by
  * [rotation] degrees, then crop to [crop] (expressed in the resulting frame), then apply [colorMatrix]
  * (the combined adjustments and filter), then soften or pixelate the bands in [blurStrokes], add the
- * [bokeh] lights, paint [drawStrokes] and finally [textOverlays] on top.
+ * [bokeh] lights, paint [drawStrokes], put [textOverlays] on top and finally wrap it all in [frame].
  */
 data class EditSpec(
     val rotation: Int,
@@ -87,6 +87,7 @@ data class EditSpec(
     val colorMatrix: FloatArray? = null,
     val bokeh: Boolean = false,
     val drawStrokes: List<DrawStroke> = emptyList(),
+    val frame: EditorFrame = EditorFrame.None,
     val blurStrokes: List<BlurStroke> = emptyList(),
     val textOverlays: List<TextOverlay> = emptyList()
 )
@@ -291,12 +292,14 @@ object MediaEditor {
             result = applyTextOverlay(result, overlay, crop, transformed.width, transformed.height)
             labelBitmaps += result
         }
+        // A frame is the only step that changes the canvas size: it adds a border around the photo.
+        val framed = if (spec.frame == EditorFrame.None) result else applyFrame(result, spec.frame)
 
         val (format, extension, mimeType) = outputFormat(item, overwrite)
         val file = File(context.cacheDir, "edit_${System.currentTimeMillis()}.$extension")
         try {
             file.outputStream().use { stream ->
-                if (!result.compress(format, 95, stream)) error("compress failed")
+                if (!framed.compress(format, 95, stream)) error("compress failed")
             }
             // Keep the camera metadata when replacing the original. The pixels are already upright,
             // so the orientation tag is reset instead of copied.
@@ -457,6 +460,40 @@ object MediaEditor {
                 )
             }
             canvas.drawCircle(x, y, radius, paint)
+        }
+        return output
+    }
+
+    /**
+     * Wraps [source] in [frame]: a border on every side plus, for a polaroid, a wider strip under the
+     * photo. The double frame adds a thin rule just inside the border.
+     */
+    private fun applyFrame(source: Bitmap, frame: EditorFrame): Bitmap {
+        val shorter = min(source.width, source.height).toFloat()
+        val border = frame.borderPx(shorter).roundToInt().coerceAtLeast(2)
+        val extraBottom = frame.extraBottomPx(shorter).roundToInt()
+        val output = Bitmap.createBitmap(
+            source.width + border * 2,
+            source.height + border * 2 + extraBottom,
+            Bitmap.Config.ARGB_8888
+        )
+        val canvas = Canvas(output)
+        canvas.drawColor(frame.background.toArgb())
+        canvas.drawBitmap(source, border.toFloat(), border.toFloat(), null)
+        frame.innerLine?.let { line ->
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = line.toArgb()
+                style = Paint.Style.STROKE
+                strokeWidth = max(1f, border * 0.16f)
+            }
+            val inset = border * 0.45f
+            canvas.drawRect(
+                border + inset,
+                border + inset,
+                output.width - border - inset,
+                output.height - border - inset,
+                paint
+            )
         }
         return output
     }
