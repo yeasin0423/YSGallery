@@ -42,7 +42,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -1070,17 +1073,17 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
 
+    // The keyboard floats over the editor instead of resizing it: the photo keep its size while a
+    // label is typed, and only the writing bar moves up with the keyboard.
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(palette.background)
             .blockTouchesBelow()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding()
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
             EditorTopBar(
                 closeEnabled = !saving,
                 saveEnabled = changed && !saving && preview != null,
@@ -1995,21 +1998,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 )
             }
 
-            // The writing bar floats above the section pills while a label is selected.
-            AnimatedVisibility(
-                visible = tab == EditorTab.Text && selectedText() != null && !saving,
-                enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
-                exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
-            ) {
-                TextEntryBar(
-                    value = selectedText()?.text ?: "",
-                    enabled = !saving,
-                    focusRequester = textFocusRequester,
-                    onValueChange = ::changeText,
-                    onDone = ::finishTextEdit
-                )
-            }
-
             // The section pills sit at the very bottom; their controls open in the space above them.
             EditorTabs(
                 selected = tab,
@@ -2030,6 +2018,26 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     textGesture = null
                     toolCursor = null
                 }
+            )
+        }
+
+        // The writing bar is an overlay: it rides above the keyboard without shrinking the editor,
+        // and sits just above the section pills when the keyboard is closed.
+        AnimatedVisibility(
+            visible = tab == EditorTab.Text && selectedText() != null && !saving,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .windowInsetsPadding(if (imeVisible) WindowInsets.ime else WindowInsets.navigationBars)
+                .padding(bottom = if (imeVisible) 6.dp else 62.dp),
+            enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
+            exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut()
+        ) {
+            TextEntryBar(
+                value = selectedText()?.text ?: "",
+                enabled = !saving,
+                focusRequester = textFocusRequester,
+                onValueChange = ::changeText,
+                onDone = ::finishTextEdit
             )
         }
 
