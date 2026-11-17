@@ -1836,6 +1836,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         }
                     }
                 }
+            }
 
             // A fresh box (or a tap on an existing one) raises the writing bar's keyboard after the
             // layout settles. Only those explicit taps bump the token, so grabbing a corner or knob
