@@ -740,13 +740,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
 
-    /** Ticking the writing bar finishes the label; an empty box is dropped without an undo step. */
-    fun finishTextEdit() {
-        discardBlankText()
-        selectedTextId = null
-        keyboardController?.hide()
-    }
-
     /** Drops the empty box a tap opened but the user never typed into. Not an undo step. */
     fun discardBlankText() {
         val selected = selectedText()
@@ -755,6 +748,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             selectedTextId = null
         }
         pendingTextCreate = null
+    }
+
+    /** Ticking the writing bar finishes the label; an empty box is dropped without an undo step. */
+    fun finishTextEdit() {
+        discardBlankText()
+        selectedTextId = null
+        keyboardController?.hide()
     }
 
     fun selectText(overlay: TextOverlay) {
