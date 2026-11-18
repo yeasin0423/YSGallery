@@ -140,7 +140,9 @@ fun BottomNavigationBar(
 @Composable
 fun SelectionActionBar(
     selectedCount: Int,
+    collageEnabled: Boolean,
     onShare: () -> Unit,
+    onCollage: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -161,11 +163,12 @@ fun SelectionActionBar(
                 modifier = Modifier
                     .height(66.dp)
                     .glass(RoundedCornerShape(percent = 50))
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                LabeledAction(Icons.Outlined.Share, strings.send, enabled, palette.onBackground, Modifier.width(92.dp), onShare)
-                LabeledAction(Icons.AutoMirrored.Rounded.DriveFileMove, strings.move, enabled, palette.onBackground, Modifier.width(92.dp), onMove)
-                LabeledAction(Icons.Outlined.Delete, strings.delete, enabled, palette.onBackground, Modifier.width(92.dp), onDelete)
+                LabeledAction(Icons.Outlined.Share, strings.send, enabled, palette.onBackground, Modifier.width(74.dp), onShare)
+                LabeledAction(Icons.AutoMirrored.Rounded.DriveFileMove, strings.move, enabled, palette.onBackground, Modifier.width(74.dp), onMove)
+                LabeledAction(Icons.Outlined.GridView, strings.collage, enabled && collageEnabled, palette.onBackground, Modifier.width(74.dp), onCollage)
+                LabeledAction(Icons.Outlined.Delete, strings.delete, enabled, palette.onBackground, Modifier.width(74.dp), onDelete)
             }
         }
 

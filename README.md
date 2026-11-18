@@ -51,6 +51,7 @@ Settings, thumbnails and edits stay in local storage.
 | **One UI look** | AMOLED-friendly dark and light palettes, grouped cards, floating frosted bars, compact titles and smooth page transitions. |
 | **Library** | Photos, videos and GIFs from internal storage and the SD card, with adjustable deep zoom that keeps huge photos and long screenshots readable. |
 | **Albums** | Create, rename, hide and nest albums; move media or whole albums between storage volumes. |
+| **Collage** | Select two to nine photos and combine them into one image with a choice of templates, then save it straight to the gallery. |
 | **Keep or clear** | Favorites and a trash you can empty from Settings. |
 | **Storage overview** | Free and used space for internal storage and the SD card, with per-category breakdowns. |
 | **Open with** | Receives photos and videos from other apps, like the system gallery. |

@@ -100,6 +100,9 @@ import com.gallery.app.ui.design.BottomEdgeFade
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import com.gallery.app.model.MediaItem
+import com.gallery.app.ui.collage.CollageEditorScreen
+import com.gallery.app.ui.design.OverlayWindow
 import com.gallery.app.ui.editor.LocalOnMediaEdited
 import com.gallery.app.ui.screens.ExternalMediaViewer
 import com.gallery.app.ui.screens.ExternalViewRequest
@@ -271,6 +274,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
     // Multi-Select and Hidden Albums state
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+    // Opening the collage page hides the grid under a full-screen overlay until it is closed or saved.
+    var collageItems by remember { mutableStateOf<List<MediaItem>?>(null) }
     val isMoveSheetOpen by viewModel.isMoveSheetOpen.collectAsStateWithLifecycle()
     val hiddenAlbums by viewModel.hiddenAlbums.collectAsStateWithLifecycle()
     val graphicsQuality by viewModel.graphicsQuality.collectAsStateWithLifecycle()
@@ -600,8 +605,13 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                     exit = barExit,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
+                    val collageSelection = remember(selectedIds, allItems, albumMedia) {
+                        (allItems + albumMedia).distinctBy { it.id }
+                            .filter { selectedIds.contains(it.id) && it.isImage }
+                    }
                     SelectionActionBar(
                         selectedCount = selectedIds.size,
+                        collageEnabled = collageSelection.size in 2..9,
                         onShare = {
                             val uris = (allItems + albumMedia).distinctBy { it.id }
                                 .filter { selectedIds.contains(it.id) }
@@ -615,8 +625,22 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                 context.startActivity(Intent.createChooser(shareIntent, strings.shareMedia))
                             }
                         },
+                        onCollage = {
+                            if (collageSelection.size in 2..9) collageItems = collageSelection
+                        },
                         onMove = { viewModel.openMoveSheet() },
                         onDelete = { viewModel.trashSelectedMedia() }
+                    )
+                }
+            }
+
+            // Collage takes over the window, like the photo editor does from the detail page.
+            collageItems?.let { items ->
+                OverlayWindow {
+                    CollageEditorScreen(
+                        items = items,
+                        onSaved = onMediaEdited,
+                        onClose = { collageItems = null }
                     )
                 }
             }

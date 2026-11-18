@@ -222,6 +222,31 @@ object MediaEditor {
         }
     }
 
+    /** Saves a rendered collage as a new JPEG in Pictures and returns its uri. */
+    suspend fun saveCollage(context: Context, bitmap: Bitmap): Uri = withContext(Dispatchers.IO) {
+        val name = "Collage_${System.currentTimeMillis()}.jpg"
+        val collection = MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val uri = insertPending(
+            context,
+            collection,
+            name,
+            "image/jpeg",
+            Environment.DIRECTORY_PICTURES,
+            allowedDirectories = listOf(Environment.DIRECTORY_DCIM, Environment.DIRECTORY_PICTURES),
+            fallbackDirectory = Environment.DIRECTORY_PICTURES
+        )
+        try {
+            context.contentResolver.openOutputStream(uri)?.use { stream ->
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)) error("compress failed")
+            } ?: error("no output stream")
+            publish(context, uri)
+        } catch (e: Exception) {
+            context.contentResolver.delete(uri, null, null)
+            throw e
+        }
+        uri
+    }
+
     /**
      * True when an edited image can replace the original in place. JPEG and PNG always; WebP only on
      * Android 11+, where the lossy encoder exists.

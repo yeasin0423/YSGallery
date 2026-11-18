@@ -38,6 +38,9 @@ interface AppStrings {
     val delete: String
     val hide: String
     val move: String
+    val collage: String
+    val collageChooseTemplate: String
+    val collageSaved: String
     val share: String
     val send: String
     val edit: String
@@ -418,6 +421,9 @@ object EnglishStrings : AppStrings {
     override val delete = "Delete"
     override val hide = "Hide"
     override val move = "Move"
+    override val collage = "Collage"
+    override val collageChooseTemplate = "Please select template"
+    override val collageSaved = "Collage saved"
     override val share = "Share"
     override val send = "Send"
     override val edit = "Edit"
