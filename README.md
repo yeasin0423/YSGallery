@@ -19,12 +19,11 @@
 
 <p align="center">
   <a href="https://github.com/yeasin0423/YSGallery/releases/latest"><img src="https://img.shields.io/badge/Download-Latest_release-2ea043?style=for-the-badge" alt="Download latest release"></a>
-  <a href="https://github.com/Soretake/PrismGallery"><img src="https://img.shields.io/badge/Upstream-Prism_Gallery-1f6feb?style=for-the-badge" alt="Upstream Prism Gallery"></a>
 </p>
 
 ---
 
-YS Gallery is a personal fork of [Prism Gallery](https://github.com/Soretake/PrismGallery), rebuilt
+YS Gallery is a personal fork of Prism Gallery, rebuilt
 around a full photo editor and trimmed to one design language (Samsung One UI) and one language
 (English). It browses photos, videos and GIFs from internal storage and the SD card, and edits photos
 without ever leaving the device.
@@ -43,7 +42,7 @@ Settings, thumbnails and edits stay in local storage.
 | Designs | Samsung One UI only |
 | Languages | English only |
 | Permissions | Photo/video access only; no network |
-| Artifact | Unsigned release APK from CI |
+| Artifact | Release APK built by CI |
 
 ## Features
 
@@ -67,7 +66,7 @@ five tabs:
 | --- | --- |
 | **Crop** | Free or fixed ratios, quarter-turn rotation either way, mirror horizontally or vertically. |
 | **Adjust** | Brightness, contrast, saturation, warmth, tint, black point, white point and highlights. |
-| **Filters** | 27 live presets, including retro film and tape looks; five bokeh light styles; ten frames. Filters and frames sit in separate sections of the tab. |
+| **Filters** | 27 live presets, including retro film and tape looks; five bokeh light styles; ten frames. Filters, Frames and Bokeh are separate sections of the tab. |
 | **Draw** | Brush, eraser, blur brush and mosaic brush, one width slider, stroke or circular patch shapes. Mosaic paints hard square blocks, not blur. |
 | **Text** | Multiple draggable, resizable and rotatable labels in twelve font styles, typed in a floating writing bar that rides above the keyboard. |
 
@@ -87,9 +86,7 @@ your photos and videos. Albums, settings and edits are stored on the device.
 
 ## Download
 
-Builds are published on the [releases page](https://github.com/yeasin0423/YSGallery/releases). Release
-APKs are unsigned unless a local `keystore.properties` is present, so treat CI artifacts as test
-builds.
+Signed builds are published on the [releases page](https://github.com/yeasin0423/YSGallery/releases).
 
 ## Build from source
 
@@ -99,8 +96,8 @@ Requirements: JDK 17 or newer and the Android SDK (compile SDK 34).
 ./gradlew assembleRelease
 ```
 
-The APK is written to `app/build/outputs/apk/release/`. Without a signing key the release APK is
-unsigned. To sign it, create a git-ignored `keystore.properties` in the project root:
+The APK is written to `app/build/outputs/apk/release/`. To sign your own build, create a git-ignored
+`keystore.properties` in the project root:
 
 ```properties
 storeFile=/path/to/your-release-key.jks
@@ -120,7 +117,7 @@ There are two **manual** workflows (`workflow_dispatch`); a normal push does not
   identical archive from this repository's `v2.7-b12` release, checks the same SHA-256 and runs that
   `gradle` directly.
 
-Both upload the unsigned APK as an artifact. The Gradle archive is not stored in the repository; older
+Both upload the APK as an artifact. The Gradle archive is not stored in the repository; older
 builds that committed it in three parts were purged from the history so clones stay small.
 
 ## Project layout
