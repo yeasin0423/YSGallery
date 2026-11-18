@@ -36,6 +36,7 @@ enum class TextFont(val render: TextRender = TextRender.Fill) {
     Bold, Regular, Serif, Handwritten, Italic, BoldItalic,
     SerifBold, Condensed, Light, Medium, Black, Monospace,
     Thin, CondensedLight, SmallCaps, SerifMono, Casual,
+    Elegant, Editorial, Marker, Typewriter,
     Outline(TextRender.Stroke), Neon(TextRender.Glow), Shadow(TextRender.Shadow)
 }
 
@@ -60,6 +61,10 @@ fun TextFont.typeface(): Typeface = when (this) {
     TextFont.SmallCaps -> Typeface.create("sans-serif-smallcaps", Typeface.NORMAL)
     TextFont.SerifMono -> Typeface.create("serif-monospace", Typeface.NORMAL)
     TextFont.Casual -> Typeface.create("casual", Typeface.NORMAL)
+    TextFont.Elegant -> Typeface.create(Typeface.SERIF, Typeface.ITALIC)
+    TextFont.Editorial -> Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
+    TextFont.Marker -> Typeface.create("casual", Typeface.BOLD)
+    TextFont.Typewriter -> Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     TextFont.Outline, TextFont.Neon, TextFont.Shadow -> Typeface.DEFAULT_BOLD
 }
 

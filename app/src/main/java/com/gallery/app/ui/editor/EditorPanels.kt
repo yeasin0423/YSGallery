@@ -774,13 +774,16 @@ private fun FontChip(
 ) {
     val palette = LocalAppTheme.current.palette
     val family = when (font) {
-        TextFont.Serif, TextFont.SerifBold, TextFont.SerifMono -> FontFamily.Serif
-        TextFont.Handwritten, TextFont.Casual -> FontFamily.Cursive
+        TextFont.Serif, TextFont.SerifBold, TextFont.SerifMono,
+        TextFont.Elegant, TextFont.Editorial -> FontFamily.Serif
+        TextFont.Handwritten, TextFont.Casual, TextFont.Marker -> FontFamily.Cursive
+        TextFont.Typewriter -> FontFamily.Monospace
         TextFont.Monospace -> FontFamily.Monospace
         else -> FontFamily.SansSerif
     }
     val weight = when (font) {
         TextFont.Bold, TextFont.BoldItalic, TextFont.SerifBold,
+        TextFont.Editorial, TextFont.Marker, TextFont.Typewriter,
         TextFont.Outline, TextFont.Neon, TextFont.Shadow -> FontWeight.Bold
         TextFont.Black -> FontWeight.Black
         TextFont.Thin -> FontWeight.Thin
@@ -789,7 +792,7 @@ private fun FontChip(
         else -> FontWeight.Normal
     }
     val style = when (font) {
-        TextFont.Italic, TextFont.BoldItalic -> FontStyle.Italic
+        TextFont.Italic, TextFont.BoldItalic, TextFont.Elegant, TextFont.Editorial -> FontStyle.Italic
         else -> FontStyle.Normal
     }
     Box(
@@ -828,6 +831,10 @@ private fun fontLabel(font: TextFont): String = when (font) {
     TextFont.SmallCaps -> strings.fontSmallCaps
     TextFont.SerifMono -> strings.fontSerifMono
     TextFont.Casual -> strings.fontCasual
+    TextFont.Elegant -> strings.fontElegant
+    TextFont.Editorial -> strings.fontEditorial
+    TextFont.Marker -> strings.fontMarker
+    TextFont.Typewriter -> strings.fontTypewriter
     TextFont.Outline -> strings.fontOutline
     TextFont.Neon -> strings.fontNeon
     TextFont.Shadow -> strings.fontShadow

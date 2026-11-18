@@ -117,6 +117,10 @@ interface AppStrings {
     val fontSmallCaps: String
     val fontSerifMono: String
     val fontCasual: String
+    val fontElegant: String
+    val fontEditorial: String
+    val fontMarker: String
+    val fontTypewriter: String
     val fontOutline: String
     val fontNeon: String
     val fontShadow: String
@@ -493,6 +497,10 @@ object EnglishStrings : AppStrings {
     override val fontSmallCaps = "Small caps"
     override val fontSerifMono = "Serif mono"
     override val fontCasual = "Casual"
+    override val fontElegant = "Elegant"
+    override val fontEditorial = "Editorial"
+    override val fontMarker = "Marker"
+    override val fontTypewriter = "Typewriter"
     override val fontOutline = "Outline"
     override val fontNeon = "Neon"
     override val fontShadow = "Shadow"
