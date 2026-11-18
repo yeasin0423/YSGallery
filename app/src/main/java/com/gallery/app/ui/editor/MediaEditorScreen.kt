@@ -358,10 +358,13 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     val mosaicPreview = remember(preview, mosaicActive) {
         if (!mosaicActive) null else preview?.let { pixelatedBitmap(it.asAndroidBitmap()) }
     }
-    // The blurred background under the portrait effect; the sharp subject is redrawn on top.
-    val focusPreview = remember(preview, focusBlur.strength) {
+    // The blurred background under the portrait effect; the sharp subject is redrawn on top. The
+    // strength is quantized so dragging the slider re-blurs in small steps instead of rebuilding the
+    // whole copy for every pixel of travel.
+    val focusPreviewStrength = (focusBlur.strength * 25f).roundToInt() / 25f
+    val focusPreview = remember(preview, focusPreviewStrength) {
         if (!focusBlur.active) null else preview?.let {
-            focusBlurredBitmap(it.asAndroidBitmap(), focusBlur.strength)
+            focusBlurredBitmap(it.asAndroidBitmap(), focusPreviewStrength)
         }
     }
     // The same colour matrix the photo is drawn with, so a softened or pixelated patch matches its
@@ -2160,7 +2163,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                 EditorTab.Blur -> BlurPanel(
                     focusRadius = focusBlur.focusRadius,
                     blurStrength = focusBlur.strength,
-                    bokeh = bokehStyle,
                     enabled = !saving && preview != null,
                     onFocusRadiusChange = { value ->
                         if (focusGestureStart == null) focusGestureStart = snapshot()
@@ -2179,12 +2181,6 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     onBlurStrengthFinished = {
                         focusGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
                         focusGestureStart = null
-                    },
-                    onSelectBokeh = { chosen ->
-                        if (chosen != bokehStyle) {
-                            pushHistory()
-                            bokehStyle = chosen
-                        }
                     }
                 )
 

@@ -480,7 +480,7 @@ object EnglishStrings : AppStrings {
     override val eraser = "Eraser"
     override val blur = "Blur"
     override val focusRadius = "Focus radius"
-    override val blurRadius = "Blur radius"
+    override val blurRadius = "Blur intensity"
     override val mosaic = "Mosaic"
     override val blurStroke = "Stroke"
     override val circle = "Circle"

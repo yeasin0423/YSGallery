@@ -45,30 +45,122 @@ const val MaxFocusRadius = 0.55f
 /** The blur used when the focus circle is first moved, so placing it shows the effect at once. */
 const val DefaultFocusStrength = 0.45f
 
-/** Shortest-side targets for the softened copy at the lightest and heaviest settings. */
-private const val LightBlurSide = 220f
-private const val HeavyBlurSide = 26f
+/**
+ * The softened copy is built on a copy whose short side is at most this many pixels. The blur keeps
+ * its radius in this space, so cost does not depend on the photo's megapixels, and the upscale back
+ * to the frame is smooth because the pixels really are blurred rather than merely enlarged.
+ */
+private const val BlurWorkingSide = 384f
+
+/** Three box passes approximate a Gaussian closely enough to read as a lens, not as blocks. */
+private const val BoxPasses = 3
+
+/** Radius of one box pass, in working-copy pixels, at the heaviest strength. */
+private const val MaxBoxRadius = 20f
 
 /**
- * A softened copy of [source] for [strength]. Like [blurredBitmap] it shrinks the frame and lets
- * bilinear filtering stretch it back, which keeps the preview cheap; [strength] only changes how far
- * it is reduced, so a heavier blur is a smaller copy.
+ * A smoothly softened copy of [source] for [strength]. Unlike a plain downscale, the pixels are
+ * actually filtered: a separable box blur runs three times over a working copy, so the result has
+ * soft gradients instead of the noisy, blocky look a stretched thumbnail gives.
  */
 fun focusBlurredBitmap(source: Bitmap, strength: Float): Bitmap {
     val amount = strength.coerceIn(0f, 1f)
+    if (amount <= 0.01f) return Bitmap.createBitmap(source)
     val shortest = min(source.width, source.height).coerceAtLeast(1)
-    val target = (LightBlurSide + (HeavyBlurSide - LightBlurSide) * amount)
-        .roundToInt()
-        .coerceAtLeast(8)
-        .coerceAtMost(shortest)
-    if (target >= shortest) return Bitmap.createBitmap(source)
-    val scale = target.toFloat() / shortest
-    return Bitmap.createScaledBitmap(
-        source,
-        (source.width * scale).roundToInt().coerceAtLeast(1),
-        (source.height * scale).roundToInt().coerceAtLeast(1),
-        true
-    )
+    val working = if (shortest > BlurWorkingSide) {
+        val scale = BlurWorkingSide / shortest
+        Bitmap.createScaledBitmap(
+            source,
+            (source.width * scale).roundToInt().coerceAtLeast(1),
+            (source.height * scale).roundToInt().coerceAtLeast(1),
+            true
+        )
+    } else if (source.config == Bitmap.Config.HARDWARE) {
+        source.copy(Bitmap.Config.ARGB_8888, false)
+    } else {
+        source
+    }
+    val radius = (1f + MaxBoxRadius * amount).roundToInt().coerceAtLeast(1)
+    val blurred = boxBlur(working, radius)
+    if (working !== source) working.recycle()
+    return blurred
+}
+
+/**
+ * Separable box blur over premultiplied channels, so semi-transparent edges fade instead of turning
+ * dark. Each plane is blurred horizontally and vertically [BoxPasses] times; edges replicate the
+ * border pixel, which avoids the bright rim a zero-padded convolution leaves behind.
+ */
+private fun boxBlur(source: Bitmap, radius: Int): Bitmap {
+    val width = source.width
+    val height = source.height
+    if (width <= 0 || height <= 0) return source.copy(Bitmap.Config.ARGB_8888, false)
+    if (width < 3 || height < 3) return source.copy(Bitmap.Config.ARGB_8888, false)
+    val count = width * height
+    val alpha = IntArray(count)
+    val red = IntArray(count)
+    val green = IntArray(count)
+    val blue = IntArray(count)
+    val pixels = IntArray(count)
+    source.getPixels(pixels, 0, width, 0, 0, width, height)
+    for (index in 0 until count) {
+        val color = pixels[index]
+        val a = (color ushr 24) and 0xFF
+        alpha[index] = a
+        red[index] = ((color shr 16) and 0xFF) * a
+        green[index] = ((color shr 8) and 0xFF) * a
+        blue[index] = (color and 0xFF) * a
+    }
+    val scratch = IntArray(count)
+    val planes = arrayOf(alpha, red, green, blue)
+    for (plane in planes) {
+        repeat(BoxPasses) {
+            blurPlane(plane, scratch, width, height, radius, horizontal = true)
+            blurPlane(scratch, plane, width, height, radius, horizontal = false)
+        }
+    }
+    for (index in 0 until count) {
+        val a = alpha[index]
+        if (a <= 0) {
+            pixels[index] = 0
+            continue
+        }
+        val r = ((red[index] + a / 2) / a).coerceIn(0, 255)
+        val g = ((green[index] + a / 2) / a).coerceIn(0, 255)
+        val b = ((blue[index] + a / 2) / a).coerceIn(0, 255)
+        pixels[index] = (a shl 24) or (r shl 16) or (g shl 8) or b
+    }
+    return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+        setPixels(pixels, 0, width, 0, 0, width, height)
+    }
+}
+
+/** One sliding-window pass; [dst] may not be the same array as [src]. */
+private fun blurPlane(
+    src: IntArray,
+    dst: IntArray,
+    width: Int,
+    height: Int,
+    radius: Int,
+    horizontal: Boolean
+) {
+    val span = if (horizontal) width else height
+    val lines = if (horizontal) height else width
+    val step = if (horizontal) 1 else width
+    val window = (radius * 2 + 1).toLong()
+    for (line in 0 until lines) {
+        val start = if (horizontal) line * width else line
+        var sum = 0L
+        for (offset in -radius..radius) {
+            sum += src[start + offset.coerceIn(0, span - 1) * step]
+        }
+        for (position in 0 until span) {
+            dst[start + position * step] = (sum / window).toInt()
+            val leaving = (position - radius).coerceIn(0, span - 1)
+            val entering = (position + radius + 1).coerceIn(0, span - 1)
+            sum += src[start + entering * step] - src[start + leaving * step]
+        }
+    }
 }
 
 /**

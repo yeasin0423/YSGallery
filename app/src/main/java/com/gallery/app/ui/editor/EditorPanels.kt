@@ -617,22 +617,19 @@ private fun DrawColorRow(color: Color, enabled: Boolean, onSelectColor: (Color) 
 }
 
 /**
- * Portrait background blur: the sharp focus circle's size, the blur radius, and a bokeh light set.
- * The circle itself is dragged directly on the photo.
+ * Portrait background blur: the sharp focus circle's size and the blur intensity. The circle itself
+ * is dragged directly on the photo. Bokeh lights live in the Filters tab.
  */
 @Composable
 internal fun BlurPanel(
     focusRadius: Float,
     blurStrength: Float,
-    bokeh: BokehStyle,
     enabled: Boolean,
     onFocusRadiusChange: (Float) -> Unit,
     onFocusRadiusFinished: () -> Unit,
     onBlurStrengthChange: (Float) -> Unit,
-    onBlurStrengthFinished: () -> Unit,
-    onSelectBokeh: (BokehStyle) -> Unit
+    onBlurStrengthFinished: () -> Unit
 ) {
-    val palette = LocalAppTheme.current.palette
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -654,29 +651,6 @@ internal fun BlurPanel(
             onChange = onBlurStrengthChange,
             onFinished = onBlurStrengthFinished
         )
-        Text(
-            text = strings.bokeh,
-            color = palette.onBackground,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 22.dp, top = 8.dp)
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BokehStyle.entries.forEach { option ->
-                AdjustmentChip(
-                    label = bokehLabel(option),
-                    selected = option == bokeh,
-                    onClick = { onSelectBokeh(option) }
-                )
-            }
-        }
     }
 }
 
