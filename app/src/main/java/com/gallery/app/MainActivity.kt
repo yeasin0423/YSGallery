@@ -606,13 +606,17 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                     exit = barExit,
                     modifier = Modifier.align(Alignment.BottomCenter)
                 ) {
-                    val collageSelection = remember(selectedIds, allItems, albumMedia) {
+                    val selectedMedia = remember(selectedIds, allItems, albumMedia) {
                         (allItems + albumMedia).distinctBy { it.id }
-                            .filter { selectedIds.contains(it.id) && it.isImage }
+                            .filter { selectedIds.contains(it.id) }
                     }
+                    // A collage is photos only: one video anywhere in the selection greys it out,
+                    // even when enough images are selected.
+                    val collageEnabled =
+                        selectedMedia.size in 2..9 && selectedMedia.all { it.isImage }
                     SelectionActionBar(
                         selectedCount = selectedIds.size,
-                        collageEnabled = collageSelection.size in 2..9,
+                        collageEnabled = collageEnabled,
                         onShare = {
                             val uris = (allItems + albumMedia).distinctBy { it.id }
                                 .filter { selectedIds.contains(it.id) }
@@ -627,7 +631,7 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                             }
                         },
                         onCollage = {
-                            if (collageSelection.size in 2..9) collageItems = collageSelection
+                            if (collageEnabled) collageItems = selectedMedia
                         },
                         onMove = { viewModel.openMoveSheet() },
                         onDelete = { viewModel.trashSelectedMedia() }
