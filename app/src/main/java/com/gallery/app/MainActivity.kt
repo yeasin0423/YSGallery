@@ -232,6 +232,7 @@ fun GalleryApp(
 @Composable
 private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeState) {
     val context = LocalContext.current
+    val onMediaEdited = LocalOnMediaEdited.current
     val lifecycleOwner = LocalLifecycleOwner.current
     // "1.1", plus what kind of build it is: a debug build, or a release build of a version still in testing.
     val appVersionName = remember(strings) {
