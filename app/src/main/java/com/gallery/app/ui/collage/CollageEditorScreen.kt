@@ -285,10 +285,11 @@ fun CollageEditorScreen(
     }
 }
 
-/** Draws one template thumbnail: a white page with grey cells. */
+/** Draws one template thumbnail: the page's own background with grey cells. */
 private fun DrawScope.drawTemplate(layout: CollageLayout) {
-    val margin = size.minDimension * 0.035f
-    val gap = size.minDimension * 0.014f
+    drawRect(color = Color(layout.background))
+    val margin = size.minDimension * layout.margin
+    val gap = size.minDimension * layout.gap
     val left = margin
     val top = margin
     val right = size.width - margin
@@ -298,14 +299,22 @@ private fun DrawScope.drawTemplate(layout: CollageLayout) {
         val cellTop = top + slot.top * (bottom - top) + gap / 2f
         val cellRight = left + slot.right * (right - left) - gap / 2f
         val cellBottom = top + slot.bottom * (bottom - top) - gap / 2f
-        drawRoundRect(
-            color = Color(0xFFD6D6D6),
-            topLeft = Offset(cellLeft, cellTop),
-            size = Size(
-                (cellRight - cellLeft).coerceAtLeast(0f),
-                (cellBottom - cellTop).coerceAtLeast(0f)
-            ),
-            cornerRadius = CornerRadius(3.dp.toPx())
-        )
+        val cellWidth = (cellRight - cellLeft).coerceAtLeast(0f)
+        val cellHeight = (cellBottom - cellTop).coerceAtLeast(0f)
+        val shape = slot.shape ?: layout.shape
+        if (shape == CollageShape.Circle) {
+            drawOval(
+                color = Color(0xFFD6D6D6),
+                topLeft = Offset(cellLeft, cellTop),
+                size = Size(cellWidth, cellHeight)
+            )
+        } else {
+            drawRoundRect(
+                color = Color(0xFFD6D6D6),
+                topLeft = Offset(cellLeft, cellTop),
+                size = Size(cellWidth, cellHeight),
+                cornerRadius = CornerRadius(3.dp.toPx())
+            )
+        }
     }
 }
