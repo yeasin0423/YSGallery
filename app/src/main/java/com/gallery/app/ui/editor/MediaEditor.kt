@@ -524,9 +524,8 @@ object MediaEditor {
         canvas.drawBitmap(source, 0f, 0f, null)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = overlay.color.toArgb()
-            textSize = overlay.size * min(frameWidth, frameHeight)
             textAlign = Paint.Align.CENTER
-            typeface = overlay.font.typeface()
+            applyTextFont(overlay.font, overlay.size * min(frameWidth, frameHeight))
         }
         val x = (overlay.center.x - crop.left) * (source.width / crop.width)
         val y = (overlay.center.y - crop.top) * (source.height / crop.height)

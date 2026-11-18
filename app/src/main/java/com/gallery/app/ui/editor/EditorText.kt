@@ -1,5 +1,6 @@
 package com.gallery.app.ui.editor
 
+import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -27,10 +28,15 @@ data class TextOverlay(
     val id: Long = 0L
 )
 
+/** Decoration beyond the typeface: plain fill, outline only, a coloured glow, or a drop shadow. */
+enum class TextRender { Fill, Stroke, Glow, Shadow }
+
 /** The typefaces the text panel offers. Bold is the default, as labels were always drawn bold. */
-enum class TextFont {
+enum class TextFont(val render: TextRender = TextRender.Fill) {
     Bold, Regular, Serif, Handwritten, Italic, BoldItalic,
-    SerifBold, Condensed, Light, Medium, Black, Monospace
+    SerifBold, Condensed, Light, Medium, Black, Monospace,
+    Thin, CondensedLight, SmallCaps, SerifMono, Casual,
+    Outline(TextRender.Stroke), Neon(TextRender.Glow), Shadow(TextRender.Shadow)
 }
 
 /** The Android typeface for a label style; the preview and the export both use this one mapping. */
@@ -49,6 +55,43 @@ fun TextFont.typeface(): Typeface = when (this) {
     TextFont.Medium -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
     TextFont.Black -> Typeface.create("sans-serif-black", Typeface.NORMAL)
     TextFont.Monospace -> Typeface.MONOSPACE
+    TextFont.Thin -> Typeface.create("sans-serif-thin", Typeface.NORMAL)
+    TextFont.CondensedLight -> Typeface.create("sans-serif-condensed-light", Typeface.NORMAL)
+    TextFont.SmallCaps -> Typeface.create("sans-serif-smallcaps", Typeface.NORMAL)
+    TextFont.SerifMono -> Typeface.create("serif-monospace", Typeface.NORMAL)
+    TextFont.Casual -> Typeface.create("casual", Typeface.NORMAL)
+    TextFont.Outline, TextFont.Neon, TextFont.Shadow -> Typeface.DEFAULT_BOLD
+}
+
+/**
+ * Applies the font's typeface and decoration to [paint]. The live preview and the exporter both call
+ * this, so an outline, glow or shadow looks identical in the saved file.
+ */
+fun Paint.applyTextFont(font: TextFont, textSize: Float) {
+    typeface = font.typeface()
+    this.textSize = textSize
+    isAntiAlias = true
+    clearShadowLayer()
+    when (font.render) {
+        TextRender.Fill -> style = Paint.Style.FILL
+        TextRender.Stroke -> {
+            style = Paint.Style.STROKE
+            strokeWidth = textSize * 0.05f
+        }
+        TextRender.Glow -> {
+            style = Paint.Style.FILL
+            setShadowLayer(textSize * 0.16f, 0f, 0f, color)
+        }
+        TextRender.Shadow -> {
+            style = Paint.Style.FILL
+            setShadowLayer(
+                textSize * 0.09f,
+                textSize * 0.03f,
+                textSize * 0.05f,
+                android.graphics.Color.argb(190, 0, 0, 0)
+            )
+        }
+    }
 }
 
 private var nextTextId = 0L

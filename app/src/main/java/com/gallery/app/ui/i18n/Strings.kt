@@ -106,6 +106,14 @@ interface AppStrings {
     val fontMedium: String
     val fontBlack: String
     val fontMonospace: String
+    val fontThin: String
+    val fontCondensedLight: String
+    val fontSmallCaps: String
+    val fontSerifMono: String
+    val fontCasual: String
+    val fontOutline: String
+    val fontNeon: String
+    val fontShadow: String
     val brushSize: String
     val undo: String
     val redo: String
@@ -480,6 +488,14 @@ object EnglishStrings : AppStrings {
     override val fontMedium = "Medium"
     override val fontBlack = "Black"
     override val fontMonospace = "Mono"
+    override val fontThin = "Thin"
+    override val fontCondensedLight = "Condensed light"
+    override val fontSmallCaps = "Small caps"
+    override val fontSerifMono = "Serif mono"
+    override val fontCasual = "Casual"
+    override val fontOutline = "Outline"
+    override val fontNeon = "Neon"
+    override val fontShadow = "Shadow"
     override val brushSize = "Brush size"
     override val undo = "Undo"
     override val redo = "Redo"

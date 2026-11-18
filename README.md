@@ -68,7 +68,7 @@ five tabs:
 | **Adjust** | Brightness, contrast, saturation, warmth, tint, black point, white point and highlights. |
 | **Filters** | 27 live presets, including retro film and tape looks; five bokeh light styles; ten frames. Filters, Frames and Bokeh are separate sections of the tab. |
 | **Draw** | Brush, eraser, blur brush and mosaic brush, one width slider, stroke or circular patch shapes. Mosaic paints hard square blocks, not blur. |
-| **Text** | Multiple draggable, resizable and rotatable labels in twelve font styles, typed in a floating writing bar that rides above the keyboard. |
+| **Text** | Multiple draggable, resizable and rotatable labels in twenty font styles, including outline, neon and shadow effects, typed in a floating writing bar that rides above the keyboard. |
 
 Everything else the editor needs is there too: undo, redo and reset; a before/after button above the
 photo (tap for a draggable split, hold to peek at the original); pinch zoom and pan; a live ring for

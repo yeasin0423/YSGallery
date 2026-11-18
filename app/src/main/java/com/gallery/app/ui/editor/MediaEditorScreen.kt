@@ -1583,8 +1583,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                         textOverlays.forEach { overlay ->
                             if (overlay.text.isBlank()) return@forEach
                             textPaint.color = overlay.color.toArgb()
-                            textPaint.typeface = overlay.font.typeface()
-                            textPaint.textSize = overlay.size * frameMin
+                            textPaint.applyTextFont(overlay.font, overlay.size * frameMin)
                             val centerX = imageRect.left + overlay.center.x * imageRect.width
                             val centerY = imageRect.top + overlay.center.y * imageRect.height
                             val metrics = textPaint.fontMetrics
