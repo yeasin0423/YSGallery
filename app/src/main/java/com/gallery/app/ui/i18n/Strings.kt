@@ -50,7 +50,6 @@ interface AppStrings {
     val flipHorizontal: String
     val flipVertical: String
     val editSaved: String
-    val aspectRatio: String
     val ratio: String
     val ratioFree: String
     val ratioOriginal: String
@@ -176,9 +175,6 @@ interface AppStrings {
     val infoDatePattern: String
     val selectAllItems: String
     val deselectAllItems: String
-    val filterAll: String
-    val filterImages: String
-    val filterVideos: String
     fun items(count: Int): String
     fun selectionTitle(count: Int): String
     val largerThumbnails: String
@@ -194,7 +190,6 @@ interface AppStrings {
 
     // Albums
     fun albums(count: Int): String
-    val allAlbums: String
     val noAlbums: String
     val subAlbums: String
     val media: String
@@ -215,7 +210,6 @@ interface AppStrings {
     val moveToInternal: String
     val moveToSd: String
     val moveToUsb: String
-    val usbStorage: String
     val showAlbums: String
     val showAll: String
     fun freeSpace(size: String): String
@@ -223,8 +217,6 @@ interface AppStrings {
     val sdCard: String
     val internal: String
     val renameAlbum: String
-    val hideAlbum: String
-    val deleteAlbum: String
     val hideAlbumTitle: String
     fun hideAlbumMessage(name: String): String
     val searchAlbums: String
@@ -271,10 +263,6 @@ interface AppStrings {
     val shareMedia: String
     val renameFile: String
     val loadingMetadata: String
-    val fileName: String
-    val resolution: String
-    val videoDuration: String
-    val bitrate: String
     val cameraModel: String
     val captureLocation: String
     val map: String
@@ -290,7 +278,6 @@ interface AppStrings {
     val appearance: String
     val settings: String
     val graphicsQuality: String
-    val graphicsAndVideo: String
     val videoPlayback: String
     val videoPlaybackDescription: String
     val seekDuration: String
@@ -298,9 +285,7 @@ interface AppStrings {
     fun secondsLabel(seconds: Int): String
     val storage: String
     val info: String
-    val library: String
     val general: String
-    val colors: String
     val light: String
     val dark: String
     val appVersion: String
@@ -309,7 +294,6 @@ interface AppStrings {
     val customColor: String
     val customAccentTitle: String
     fun customAccentMessage(lightMode: Boolean, designName: String): String
-    val customPalette: String
     val language: String
     fun qualityDescription(tier: PerformanceProfile): String
     fun paletteLabel(palette: AppColorPalette): String
@@ -353,8 +337,6 @@ interface AppStrings {
     val permissionTitle: String
     val permissionDescription: String
     val permissionGrant: String
-    val permissionWarning: String
-    val permissionMissingMedia: String
     val permissionOpenSettings: String
     val permissionMediaTitle: String
     val permissionMediaNeeded: String
@@ -439,7 +421,6 @@ object EnglishStrings : AppStrings {
     override val flipHorizontal = "Mirror"
     override val flipVertical = "Flip"
     override val editSaved = "Saved as a copy"
-    override val aspectRatio = "Aspect ratio"
     override val ratio = "Ratio"
     override val ratioFree = "Free"
     override val ratioOriginal = "Original"
@@ -564,9 +545,6 @@ object EnglishStrings : AppStrings {
     override val infoDatePattern = "EEEE, MMMM d, yyyy 'at' HH:mm"
     override val selectAllItems = "Select All"
     override val deselectAllItems = "Deselect All"
-    override val filterAll = "All"
-    override val filterImages = "Images"
-    override val filterVideos = "Videos"
     override fun items(count: Int) = if (count == 1) "1 item" else "$count items"
     override fun selectionTitle(count: Int) = if (count == 0) "Select items" else "$count selected"
     override val largerThumbnails = "Larger thumbnails"
@@ -581,7 +559,6 @@ object EnglishStrings : AppStrings {
     override val longDatePattern = "MMMM d, yyyy"
 
     override fun albums(count: Int) = if (count == 1) "1 album" else "$count albums"
-    override val allAlbums = "All albums"
     override val noAlbums = "No albums yet"
     override val subAlbums = "Sub-albums"
     override val media = "Media"
@@ -602,7 +579,6 @@ object EnglishStrings : AppStrings {
     override val moveToInternal = "Move to internal storage"
     override val moveToSd = "Move to SD card"
     override val moveToUsb = "Move to USB storage"
-    override val usbStorage = "USB storage"
     override val showAlbums = "Show albums"
     override val showAll = "All"
     override fun freeSpace(size: String) = "$size free"
@@ -610,8 +586,6 @@ object EnglishStrings : AppStrings {
     override val sdCard = "SD card"
     override val internal = "Internal"
     override val renameAlbum = "Rename album"
-    override val hideAlbum = "Hide album"
-    override val deleteAlbum = "Delete album"
     override val hideAlbumTitle = "Hide album?"
     override fun hideAlbumMessage(name: String) =
         "“$name” and its contents will be hidden from the gallery and your albums. You can show it again at any time under “Hidden albums”."
@@ -660,10 +634,6 @@ object EnglishStrings : AppStrings {
     override val shareMedia = "Share media"
     override val renameFile = "Rename file"
     override val loadingMetadata = "Loading metadata…"
-    override val fileName = "File name"
-    override val resolution = "Resolution"
-    override val videoDuration = "Video length"
-    override val bitrate = "Bitrate"
     override val cameraModel = "Camera model"
     override val captureLocation = "Location"
     override val map = "Map"
@@ -707,7 +677,6 @@ object EnglishStrings : AppStrings {
     override val usedWord = "used"
     override val suggestions = "Suggestions"
     override val graphicsQuality = "Graphics quality"
-    override val graphicsAndVideo = "Graphics and video"
     override val videoPlayback = "Video playback"
     override val videoPlaybackDescription =
         "Videos play on their own page. There you can change the playback speed, lock the screen " +
@@ -717,9 +686,7 @@ object EnglishStrings : AppStrings {
     override fun secondsLabel(seconds: Int) = if (seconds == 1) "1 second" else "$seconds seconds"
     override val storage = "Storage"
     override val info = "Info"
-    override val library = "Library"
     override val general = "General"
-    override val colors = "Colors"
     override val light = "Light"
     override val dark = "Dark"
     override val appVersion = "App version"
@@ -729,7 +696,6 @@ object EnglishStrings : AppStrings {
     override val customAccentTitle = "Custom accent color"
     override fun customAccentMessage(lightMode: Boolean, designName: String) =
         "The ${if (lightMode) "light" else "dark"} base colors of $designName stay the same - only the accent changes."
-    override val customPalette = "Custom palette"
     override val language = "Language"
     override fun qualityDescription(tier: PerformanceProfile) = when (tier) {
         PerformanceProfile.LOW -> "Just the essentials: no animations, no glass, smaller thumbnails, lowest memory and battery use."
@@ -752,8 +718,6 @@ object EnglishStrings : AppStrings {
     override val permissionTitle = "Access to photos and videos"
     override val permissionDescription = "Allow access to your media library to show your photos and videos."
     override val permissionGrant = "Grant permissions"
-    override val permissionWarning = "The app won't work properly while these permissions are missing:"
-    override val permissionMissingMedia = "Access to photos and videos — without it the gallery can't show anything"
     override val permissionOpenSettings = "Open in settings"
     override val permissionMediaTitle = "Photos and videos"
     override val permissionMediaNeeded = "Needed to show your photos and videos."

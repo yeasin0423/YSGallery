@@ -73,7 +73,6 @@ import com.gallery.app.ui.design.ThemedIconButton
 import com.gallery.app.ui.design.ThemedPopupMenu
 import com.gallery.app.ui.design.ThemedTopBar
 import com.gallery.app.ui.design.bottomBarContentPadding
-import com.gallery.app.ui.design.glass
 import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.viewmodel.MediaFilter
 import com.gallery.app.util.DateUtils

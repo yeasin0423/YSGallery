@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -36,11 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.toArgb
 import com.gallery.app.util.WallpaperAccents
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gallery.app.PerformanceProfile
@@ -203,32 +200,6 @@ fun MenuScreen(
         }
     }
 }
-
-@Composable
-private fun OneUiShortcutTile(
-    icon: ImageVector,
-    iconColor: Color,
-    title: String,
-    subtitle: String,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
-    val palette = LocalAppTheme.current.palette
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(26.dp))
-            .background(palette.surface)
-            .clickable(onClick = onClick)
-            .padding(20.dp)
-    ) {
-        Icon(icon, null, tint = iconColor, modifier = Modifier.size(30.dp))
-        Spacer(modifier = Modifier.height(26.dp))
-        Text(title, color = palette.onBackground, fontSize = 17.sp, fontWeight = FontWeight.Medium)
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(subtitle, color = palette.accent, fontSize = 14.sp)
-    }
-}
-
 
 /** Accent swatches for the active mode, plus a trailing "custom" swatch. */
 @Composable
@@ -413,4 +384,3 @@ internal fun graphicsQualityLabel(tier: PerformanceProfile): String = when (tier
     PerformanceProfile.ULTRA -> "Ultra"
 }
 
-private fun graphicsQualityDescription(tier: PerformanceProfile): String = strings.qualityDescription(tier)

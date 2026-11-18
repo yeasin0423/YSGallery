@@ -18,10 +18,6 @@ import com.gallery.app.model.sortAlbums
 import com.gallery.app.model.MediaItem
 import com.gallery.app.service.MoveMediaService
 import com.gallery.app.service.MoveProgressHolder
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow

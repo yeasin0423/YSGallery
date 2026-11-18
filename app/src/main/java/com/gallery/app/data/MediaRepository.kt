@@ -15,13 +15,11 @@ import android.os.Environment
 import android.os.StatFs
 import android.os.storage.StorageManager
 import android.provider.MediaStore
-import androidx.core.content.ContextCompat
 import com.gallery.app.model.AlbumItem
 import com.gallery.app.model.MediaItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 
 sealed interface RenameResult {
     data class Success(val newName: String) : RenameResult
