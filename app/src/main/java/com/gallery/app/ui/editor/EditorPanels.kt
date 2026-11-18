@@ -38,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -286,7 +287,8 @@ internal fun FilterPanel(
         SegmentedToggle(
             options = listOf(
                 FilterSection.Filters to strings.filters,
-                FilterSection.Frames to strings.frame
+                FilterSection.Frames to strings.frame,
+                FilterSection.Bokeh to strings.bokeh
             ),
             selected = section,
             enabled = enabled,
@@ -294,39 +296,6 @@ internal fun FilterPanel(
         )
         when (section) {
             FilterSection.Filters -> {
-                Text(
-                    text = strings.bokeh,
-                    color = palette.onBackground,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(start = 22.dp, top = 10.dp)
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(start = 16.dp, end = 16.dp, top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    BokehStyle.entries.forEach { option ->
-                        val isSelected = option == bokeh
-                        Box(
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .background(if (isSelected) palette.accent else palette.surfaceVariant)
-                                .clickable(enabled = enabled) { onSelectBokeh(option) }
-                                .padding(horizontal = 14.dp, vertical = 7.dp)
-                        ) {
-                            Text(
-                                text = bokehLabel(option),
-                                color = if (isSelected) palette.onAccent else palette.onBackground,
-                                fontSize = 13.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -424,11 +393,85 @@ internal fun FilterPanel(
                     }
                 }
             }
+
+            // Bokeh sits next to frames: each thumbnail is the current photo with that light set on it.
+            FilterSection.Bokeh -> Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BokehStyle.entries.forEach { option ->
+                    val isSelected = option == bokeh
+                    Column(
+                        modifier = Modifier
+                            .width(72.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(enabled = enabled) { onSelectBokeh(option) }
+                            .padding(4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Canvas(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(2.dp, palette.accent, RoundedCornerShape(13.dp))
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
+                            val side = min(preview.width, preview.height).toFloat()
+                            val srcX = (preview.width - side) / 2f
+                            val srcY = (preview.height - side) / 2f
+                            drawImage(
+                                image = preview,
+                                srcOffset = IntOffset(srcX.roundToInt(), srcY.roundToInt()),
+                                srcSize = IntSize(side.roundToInt(), side.roundToInt()),
+                                dstOffset = IntOffset.Zero,
+                                dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+                            )
+                            val thumb = min(size.width, size.height)
+                            option.orbs.forEach { orb ->
+                                val x = (orb.center.x * preview.width - srcX) / side * size.width
+                                val y = (orb.center.y * preview.height - srcY) / side * size.height
+                                val radius = orb.radius * thumb
+                                if (radius <= 0f) return@forEach
+                                drawCircle(
+                                    brush = Brush.radialGradient(
+                                        colorStops = arrayOf(
+                                            0f to orb.color.copy(alpha = orb.alpha),
+                                            0.55f to orb.color.copy(alpha = orb.alpha * 0.5f),
+                                            1f to Color.Transparent
+                                        ),
+                                        center = Offset(x, y),
+                                        radius = radius
+                                    ),
+                                    radius = radius,
+                                    center = Offset(x, y)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(5.dp))
+                        Text(
+                            text = bokehLabel(option),
+                            color = if (isSelected) palette.accent else palette.onBackground,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
-private enum class FilterSection { Filters, Frames }
+private enum class FilterSection { Filters, Frames, Bokeh }
 
 private fun bokehLabel(style: BokehStyle): String = when (style) {
     BokehStyle.None -> strings.bokehNone
