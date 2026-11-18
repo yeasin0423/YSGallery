@@ -66,7 +66,7 @@ five tabs:
 | --- | --- |
 | **Crop** | Free or fixed ratios, quarter-turn rotation either way, mirror horizontally or vertically. |
 | **Adjust** | Brightness, contrast, saturation, warmth, tint, black point, white point and highlights. |
-| **Filters** | 27 live presets, including retro film and tape looks; five bokeh light styles; ten frames. Filters, Frames and Bokeh are separate sections of the tab. |
+| **Filters** | 27 live presets, including retro film and tape looks; seventeen frames, from plain borders to film perforations, corner marks, coloured mats and printed captions; five bokeh light styles. Filters, Frames and Bokeh are separate sections of the tab. |
 | **Draw** | Brush, eraser, blur brush and mosaic brush, one width slider, stroke or circular patch shapes. Mosaic paints hard square blocks, not blur. |
 | **Text** | Multiple draggable, resizable and rotatable labels in twenty font styles, including outline, neon and shadow effects, typed in a floating writing bar that rides above the keyboard. |
 

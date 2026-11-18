@@ -15,6 +15,7 @@ import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.Typeface
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -467,7 +468,8 @@ object MediaEditor {
 
     /**
      * Wraps [source] in [frame]: a border on every side plus, for a polaroid, a wider strip under the
-     * photo. A frame with a line colour adds a thin rule just inside the border.
+     * photo. A frame with a line colour adds a thin rule, film frames punch holes along the top and
+     * bottom borders, corner frames draw L marks, and captioned frames print a word in the strip.
      */
     private fun applyFrame(source: Bitmap, frame: EditorFrame): Bitmap {
         val shorter = min(source.width, source.height).toFloat()
@@ -485,7 +487,7 @@ object MediaEditor {
             val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = line.toArgb()
                 style = Paint.Style.STROKE
-                strokeWidth = max(1f, border * 0.16f)
+                strokeWidth = max(1f, border * 0.12f)
             }
             val inset = border * 0.45f
             canvas.drawRect(
@@ -495,6 +497,61 @@ object MediaEditor {
                 output.height - border - inset,
                 paint
             )
+        }
+        if (frame.perforated) {
+            val hole = border * 0.34f
+            val gap = hole * 1.7f
+            if (hole > 0f && gap > 0f) {
+                val count = ((output.width - border) / gap).toInt().coerceAtLeast(2)
+                val span = (count - 1) * gap
+                val start = output.width / 2f - span / 2f - hole / 2f
+                val top = (border - hole) / 2f
+                val bottom = output.height - border + (border - hole) / 2f
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = frame.accentColor.toArgb()
+                }
+                repeat(count) { index ->
+                    val x = start + index * gap
+                    canvas.drawRect(x, top, x + hole, top + hole, paint)
+                    canvas.drawRect(x, bottom, x + hole, bottom + hole, paint)
+                }
+            }
+        }
+        if (frame.cornerMarks) {
+            val inset = border * 1.4f
+            val length = (border * 0.9f).coerceAtLeast(2f)
+            val left = inset
+            val right = output.width - inset
+            val top = inset
+            val bottom = output.height - inset
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = frame.accentColor.toArgb()
+                style = Paint.Style.STROKE
+                strokeWidth = max(1f, border * 0.12f)
+            }
+            canvas.drawLine(left, top, left + length, top, paint)
+            canvas.drawLine(left, top, left, top + length, paint)
+            canvas.drawLine(right, top, right - length, top, paint)
+            canvas.drawLine(right, top, right, top + length, paint)
+            canvas.drawLine(left, bottom, left + length, bottom, paint)
+            canvas.drawLine(left, bottom, left, bottom - length, paint)
+            canvas.drawLine(right, bottom, right - length, bottom, paint)
+            canvas.drawLine(right, bottom, right, bottom - length, paint)
+        }
+        frame.caption?.let { caption ->
+            val textSize = shorter * 0.036f
+            if (textSize > 0f) {
+                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = frame.captionColor.toArgb()
+                    textAlign = Paint.Align.CENTER
+                    this.textSize = textSize
+                    typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                    letterSpacing = 0.18f
+                }
+                val centerY = output.height - border - extraBottom / 2f
+                val baseline = centerY - (paint.ascent() + paint.descent()) / 2f
+                canvas.drawText(caption, output.width / 2f, baseline, paint)
+            }
         }
         return output
     }

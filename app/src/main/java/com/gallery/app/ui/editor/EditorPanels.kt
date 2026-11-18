@@ -493,6 +493,13 @@ private fun frameLabel(frame: EditorFrame): String = when (frame) {
     EditorFrame.Vintage -> strings.frameVintage
     EditorFrame.PolaroidBlack -> strings.framePolaroidBlack
     EditorFrame.Cinema -> strings.frameCinema
+    EditorFrame.Rose -> strings.frameRose
+    EditorFrame.Ocean -> strings.frameOcean
+    EditorFrame.Sunset -> strings.frameSunset
+    EditorFrame.Film -> strings.frameFilm
+    EditorFrame.Memories -> strings.frameMemories
+    EditorFrame.Today -> strings.frameToday
+    EditorFrame.Corner -> strings.frameCorner
 }
 
 /** One One UI segmented switch shared by the tool and blur-shape rows. */
