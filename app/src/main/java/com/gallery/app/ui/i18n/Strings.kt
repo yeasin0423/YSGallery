@@ -175,6 +175,9 @@ interface AppStrings {
     val infoDatePattern: String
     val selectAllItems: String
     val deselectAllItems: String
+    val filterAll: String
+    val filterImages: String
+    val filterVideos: String
     fun items(count: Int): String
     fun selectionTitle(count: Int): String
     val largerThumbnails: String
@@ -210,6 +213,7 @@ interface AppStrings {
     val moveToInternal: String
     val moveToSd: String
     val moveToUsb: String
+    val usbStorage: String
     val showAlbums: String
     val showAll: String
     fun freeSpace(size: String): String
@@ -294,6 +298,7 @@ interface AppStrings {
     val customColor: String
     val customAccentTitle: String
     fun customAccentMessage(lightMode: Boolean, designName: String): String
+    val customPalette: String
     val language: String
     fun qualityDescription(tier: PerformanceProfile): String
     fun paletteLabel(palette: AppColorPalette): String
@@ -545,6 +550,9 @@ object EnglishStrings : AppStrings {
     override val infoDatePattern = "EEEE, MMMM d, yyyy 'at' HH:mm"
     override val selectAllItems = "Select All"
     override val deselectAllItems = "Deselect All"
+    override val filterAll = "All"
+    override val filterImages = "Images"
+    override val filterVideos = "Videos"
     override fun items(count: Int) = if (count == 1) "1 item" else "$count items"
     override fun selectionTitle(count: Int) = if (count == 0) "Select items" else "$count selected"
     override val largerThumbnails = "Larger thumbnails"
@@ -579,6 +587,7 @@ object EnglishStrings : AppStrings {
     override val moveToInternal = "Move to internal storage"
     override val moveToSd = "Move to SD card"
     override val moveToUsb = "Move to USB storage"
+    override val usbStorage = "USB storage"
     override val showAlbums = "Show albums"
     override val showAll = "All"
     override fun freeSpace(size: String) = "$size free"
@@ -696,6 +705,7 @@ object EnglishStrings : AppStrings {
     override val customAccentTitle = "Custom accent color"
     override fun customAccentMessage(lightMode: Boolean, designName: String) =
         "The ${if (lightMode) "light" else "dark"} base colors of $designName stay the same - only the accent changes."
+    override val customPalette = "Custom palette"
     override val language = "Language"
     override fun qualityDescription(tier: PerformanceProfile) = when (tier) {
         PerformanceProfile.LOW -> "Just the essentials: no animations, no glass, smaller thumbnails, lowest memory and battery use."
