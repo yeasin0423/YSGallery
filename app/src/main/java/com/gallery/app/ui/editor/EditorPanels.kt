@@ -56,8 +56,8 @@ import com.gallery.app.ui.theme.onAccent
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** The five bottom sections of the editor. Crop keeps the existing rotate/mirror/ratio tools. */
-internal enum class EditorTab { Crop, Adjust, Filters, Draw, Text }
+/** The six bottom sections of the editor. Crop keeps the existing rotate/mirror/ratio tools. */
+internal enum class EditorTab { Crop, Adjust, Filters, Blur, Draw, Text }
 
 @Composable
 internal fun EditorTabs(selected: EditorTab, enabled: Boolean, onSelect: (EditorTab) -> Unit) {
@@ -99,6 +99,7 @@ private fun tabLabel(tab: EditorTab): String = when (tab) {
     EditorTab.Crop -> strings.crop
     EditorTab.Adjust -> strings.adjust
     EditorTab.Filters -> strings.filters
+    EditorTab.Blur -> strings.blur
     EditorTab.Draw -> strings.draw
     EditorTab.Text -> strings.text
 }
@@ -612,6 +613,119 @@ private fun DrawColorRow(color: Color, enabled: Boolean, onSelectColor: (Color) 
                 )
             }
         }
+    }
+}
+
+/**
+ * Portrait background blur: the sharp focus circle's size, the blur radius, and a bokeh light set.
+ * The circle itself is dragged directly on the photo.
+ */
+@Composable
+internal fun BlurPanel(
+    focusRadius: Float,
+    blurStrength: Float,
+    bokeh: BokehStyle,
+    enabled: Boolean,
+    onFocusRadiusChange: (Float) -> Unit,
+    onFocusRadiusFinished: () -> Unit,
+    onBlurStrengthChange: (Float) -> Unit,
+    onBlurStrengthFinished: () -> Unit,
+    onSelectBokeh: (BokehStyle) -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 12.dp)
+    ) {
+        FocusSlider(
+            label = strings.focusRadius,
+            value = focusRadius,
+            valueRange = MinFocusRadius..MaxFocusRadius,
+            enabled = enabled,
+            onChange = onFocusRadiusChange,
+            onFinished = onFocusRadiusFinished
+        )
+        FocusSlider(
+            label = strings.blurRadius,
+            value = blurStrength,
+            valueRange = 0f..1f,
+            enabled = enabled,
+            onChange = onBlurStrengthChange,
+            onFinished = onBlurStrengthFinished
+        )
+        Text(
+            text = strings.bokeh,
+            color = palette.onBackground,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(start = 22.dp, top = 8.dp)
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BokehStyle.entries.forEach { option ->
+                AdjustmentChip(
+                    label = bokehLabel(option),
+                    selected = option == bokeh,
+                    onClick = { onSelectBokeh(option) }
+                )
+            }
+        }
+    }
+}
+
+/** One labelled blur slider; the value reads as a percentage on the right. */
+@Composable
+private fun FocusSlider(
+    label: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    enabled: Boolean,
+    onChange: (Float) -> Unit,
+    onFinished: () -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 22.dp, end = 22.dp, top = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                color = palette.onBackground,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${(value * 100f).roundToInt()}%",
+                color = palette.textMuted,
+                fontSize = 12.sp
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = onChange,
+            onValueChangeFinished = onFinished,
+            valueRange = valueRange,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = palette.accent,
+                activeTrackColor = palette.accent,
+                inactiveTrackColor = palette.surfaceVariant,
+                activeTickColor = Color.Transparent,
+                inactiveTickColor = Color.Transparent
+            ),
+            modifier = Modifier.padding(horizontal = 14.dp)
+        )
     }
 }
 

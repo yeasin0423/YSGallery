@@ -77,8 +77,9 @@ data class NormalizedRect(val left: Float, val top: Float, val right: Float, val
 /**
  * An edit: mirror first ([flipHorizontal]/[flipVertical] on the source frame), then rotate clockwise by
  * [rotation] degrees, then crop to [crop] (expressed in the resulting frame), then apply [colorMatrix]
- * (the combined adjustments and filter), then soften or pixelate the bands in [blurStrokes], add the
- * [bokeh] lights, paint [drawStrokes], put [textOverlays] on top and finally wrap it all in [frame].
+ * (the combined adjustments and filter), then the portrait [focusBlur], then soften or pixelate the
+ * bands in [blurStrokes], add the [bokeh] lights, paint [drawStrokes], put [textOverlays] on top and
+ * finally wrap it all in [frame].
  */
 data class EditSpec(
     val rotation: Int,
@@ -86,6 +87,7 @@ data class EditSpec(
     val flipVertical: Boolean,
     val crop: NormalizedRect,
     val colorMatrix: FloatArray? = null,
+    val focusBlur: FocusBlur = FocusBlur(),
     val bokeh: BokehStyle = BokehStyle.None,
     val drawStrokes: List<DrawStroke> = emptyList(),
     val frame: EditorFrame = EditorFrame.None,
@@ -294,12 +296,18 @@ object MediaEditor {
         val cropped = if (crop.isFull) transformed else Bitmap.createBitmap(transformed, x, y, width, height)
         // Adjustments and the selected filter are baked in after cropping so the export matches the preview.
         val colored = spec.colorMatrix?.let { applyColorMatrix(cropped, it) } ?: cropped
+        // Portrait blur works on the cropped frame, then the drawn patches sit on top of it.
+        val focused = if (spec.focusBlur.active) {
+            applyFocusBlur(colored, spec.focusBlur)
+        } else {
+            colored
+        }
         // Softened and pixelated patches sit on the adjusted image, then ink, then labels: that is
         // the preview order.
         val softened = if (spec.blurStrokes.isEmpty()) {
-            colored
+            focused
         } else {
-            applyPatchStrokes(colored, spec.blurStrokes, crop, transformed.width, transformed.height)
+            applyPatchStrokes(focused, spec.blurStrokes, crop, transformed.width, transformed.height)
         }
         val lit = if (spec.bokeh != BokehStyle.None) {
             applyBokeh(softened, crop, transformed.width, transformed.height, spec.bokeh)
@@ -339,6 +347,7 @@ object MediaEditor {
             if (inked !== lit) inked.recycle()
             if (lit !== softened) lit.recycle()
             if (softened !== colored) softened.recycle()
+            if (focused !== colored && focused !== softened) focused.recycle()
             if (colored !== cropped) colored.recycle()
             if (cropped !== transformed) cropped.recycle()
             if (transformed !== decoded) transformed.recycle()

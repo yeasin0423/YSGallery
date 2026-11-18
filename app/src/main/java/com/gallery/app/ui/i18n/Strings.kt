@@ -94,6 +94,8 @@ interface AppStrings {
     val draw: String
     val eraser: String
     val blur: String
+    val focusRadius: String
+    val blurRadius: String
     val mosaic: String
     val blurStroke: String
     val circle: String
@@ -477,6 +479,8 @@ object EnglishStrings : AppStrings {
     override val draw = "Draw"
     override val eraser = "Eraser"
     override val blur = "Blur"
+    override val focusRadius = "Focus radius"
+    override val blurRadius = "Blur radius"
     override val mosaic = "Mosaic"
     override val blurStroke = "Stroke"
     override val circle = "Circle"

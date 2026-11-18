@@ -171,6 +171,7 @@ private data class EditorSnapshot(
     val ratio: CropRatio,
     val adjustments: EditorAdjustments,
     val filter: EditorFilter,
+    val focusBlur: FocusBlur,
     val bokeh: BokehStyle,
     val frame: EditorFrame,
     val strokes: List<DrawStroke>,
@@ -245,6 +246,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var selectedAdjustment by remember { mutableStateOf(EditorAdjustment.Brightness) }
     var adjustments by remember { mutableStateOf(EditorAdjustments()) }
     var filter by remember { mutableStateOf(EditorFilterNone) }
+    // Portrait background blur: a sharp circle over a softened frame, part of the image.
+    var focusBlur by remember { mutableStateOf(FocusBlur()) }
     // Renders the selected bokeh light set over the photo; part of the image, so it is undoable.
     var bokehStyle by remember { mutableStateOf(BokehStyle.None) }
     var frame by remember { mutableStateOf(EditorFrame.None) }
@@ -301,6 +304,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var strokeGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var eraseGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var blurGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var focusGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGesture by remember { mutableStateOf<TextGesture?>(null) }
 
@@ -354,6 +358,12 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     val mosaicPreview = remember(preview, mosaicActive) {
         if (!mosaicActive) null else preview?.let { pixelatedBitmap(it.asAndroidBitmap()) }
     }
+    // The blurred background under the portrait effect; the sharp subject is redrawn on top.
+    val focusPreview = remember(preview, focusBlur.strength) {
+        if (!focusBlur.active) null else preview?.let {
+            focusBlurredBitmap(it.asAndroidBitmap(), focusBlur.strength)
+        }
+    }
     // The same colour matrix the photo is drawn with, so a softened or pixelated patch matches its
     // surroundings. The mosaic copy is stretched with filtering off, which is what makes it blocky.
     val blurPaint = remember(colorMatrix) {
@@ -370,7 +380,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         }
     }
     val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
-            !adjustments.isNeutral || filter.id != EditorFilterNone.id || bokehStyle != BokehStyle.None ||
+            !adjustments.isNeutral || filter.id != EditorFilterNone.id || focusBlur.active ||
+            bokehStyle != BokehStyle.None ||
             frame != EditorFrame.None || strokes.isNotEmpty() || blurStrokes.isNotEmpty() ||
             textOverlays.any { it.text.isNotBlank() }
     val canOverwrite = item.isImage && MediaEditor.canOverwrite(item)
@@ -391,6 +402,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ratio = ratio,
         adjustments = adjustments,
         filter = filter,
+        focusBlur = focusBlur,
         bokeh = bokehStyle,
         frame = frame,
         strokes = strokes,
@@ -412,6 +424,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ratio = state.ratio
         adjustments = state.adjustments
         filter = state.filter
+        focusBlur = state.focusBlur
         bokehStyle = state.bokeh
         frame = state.frame
         strokes = state.strokes
@@ -434,6 +447,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         strokeGestureStart = null
         eraseGestureStart = null
         blurGestureStart = null
+        focusGestureStart = null
         textGestureStart = null
         textGesture = null
         openPanel = EditorPanel.None
@@ -511,6 +525,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         blurStrokes = blurStrokes.map {
             if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise()
         }
+        focusBlur = if (clockwise) focusBlur.rotateClockwise() else focusBlur.rotateCounterClockwise()
         textOverlays = textOverlays.map {
             if (clockwise) it.rotateClockwise() else it.rotateCounterClockwise()
         }
@@ -528,6 +543,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         crop = crop.flipHorizontal()
         strokes = strokes.map { it.flipHorizontal() }
         blurStrokes = blurStrokes.map { it.flipHorizontal() }
+        focusBlur = focusBlur.flipHorizontal()
         textOverlays = textOverlays.map { it.flipHorizontal() }
         scope.launch {
             flipXAnimation.snapTo(-1f)
@@ -541,6 +557,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         crop = crop.flipVertical()
         strokes = strokes.map { it.flipVertical() }
         blurStrokes = blurStrokes.map { it.flipVertical() }
+        focusBlur = focusBlur.flipVertical()
         textOverlays = textOverlays.map { it.flipVertical() }
         scope.launch {
             flipYAnimation.snapTo(-1f)
@@ -558,6 +575,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         adjustments = EditorAdjustments()
         selectedAdjustment = EditorAdjustment.Brightness
         filter = EditorFilterNone
+        focusBlur = FocusBlur()
         bokehStyle = BokehStyle.None
         frame = EditorFrame.None
         strokes = emptyList()
@@ -601,6 +619,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         ((position.x - rect.left) / rect.width).coerceIn(0f, 1f),
         ((position.y - rect.top) / rect.height).coerceIn(0f, 1f)
     )
+
+    /** A touch mapped to the focus circle's cropped-frame coordinates, clamped inside the crop. */
+    fun focusPoint(position: Offset, rect: Rect): Offset {
+        val focusRect = cropRectIn(rect, crop)
+        if (focusRect.width <= 0f || focusRect.height <= 0f) return focusBlur.center
+        return Offset(
+            ((position.x - focusRect.left) / focusRect.width).coerceIn(0f, 1f),
+            ((position.y - focusRect.top) / focusRect.height).coerceIn(0f, 1f)
+        )
+    }
 
     fun beginStroke(position: Offset, rect: Rect) {
         if (!rect.contains(position)) return
@@ -1002,6 +1030,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             flipVertical = flipVertical,
             crop = crop,
             colorMatrix = colorMatrix,
+            focusBlur = focusBlur,
             bokeh = bokehStyle,
             drawStrokes = strokes,
             frame = frame,
@@ -1044,6 +1073,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             flipVertical = flipVertical,
             crop = crop,
             colorMatrix = colorMatrix,
+            focusBlur = focusBlur,
             bokeh = bokehStyle,
             drawStrokes = strokes,
             frame = frame,
@@ -1273,6 +1303,50 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                 }
                                 return@pointerInput
                             }
+                            if (tab == EditorTab.Blur) {
+                                // A touch places the focus circle; dragging moves it. Two fingers
+                                // still zoom and pan, so a large photo can be inspected closely.
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val rect = liveImageRect.value
+                                    val moving = cropRectIn(rect, crop).contains(down.position)
+                                    var transformed = false
+                                    if (moving) {
+                                        focusGestureStart = snapshot()
+                                        // Placing the circle is the moment the effect should be
+                                        // visible, so a fresh page starts with a gentle blur.
+                                        if (!focusBlur.active) {
+                                            focusBlur = focusBlur.copy(strength = DefaultFocusStrength)
+                                        }
+                                        focusBlur = focusBlur.copy(center = focusPoint(down.position, rect))
+                                    }
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.count { it.pressed } >= 2) {
+                                            transformed = true
+                                            event.changes.forEach { it.consume() }
+                                            applyTransform(
+                                                zoomChange = event.calculateZoom(),
+                                                pan = event.calculatePan(),
+                                                centroid = event.calculateCentroid(useCurrent = true)
+                                            )
+                                        } else if (moving && !transformed) {
+                                            val change = event.changes.firstOrNull { it.id == down.id }
+                                            if (change != null && change.pressed) {
+                                                change.consume()
+                                                focusBlur =
+                                                    focusBlur.copy(center = focusPoint(change.position, rect))
+                                            }
+                                        }
+                                        if (event.changes.none { it.pressed }) break
+                                    }
+                                    if (!transformed) {
+                                        focusGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+                                    }
+                                    focusGestureStart = null
+                                }
+                                return@pointerInput
+                            }
                             if (tab == EditorTab.Draw) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -1492,6 +1566,31 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     val inkBounds = cropRectIn(imageRect, crop)
                     // Ink is clipped to the crop so the preview hides what the export would cut off.
                     clipRect(inkBounds.left, inkBounds.top, inkBounds.right, inkBounds.bottom) {
+                        // Portrait blur: the softened frame fills the crop, then the sharp subject is
+                        // laid back on top through a feathered circle. Both use the photo's colour
+                        // matrix so the effect matches the exported pixels.
+                        if (focusBlur.active) {
+                            val focusRect = cropRectIn(imageRect, crop)
+                            drawIntoCanvas { canvas ->
+                                val native = canvas.nativeCanvas
+                                val destination = RectF(
+                                    imageRect.left,
+                                    imageRect.top,
+                                    imageRect.right,
+                                    imageRect.bottom
+                                )
+                                focusPreview?.let { native.drawBitmap(it, null, destination, blurPaint) }
+                                drawFocusedSubject(
+                                    canvas = native,
+                                    source = image.asAndroidBitmap(),
+                                    destination = destination,
+                                    paint = blurPaint,
+                                    centerX = focusRect.left + focusBlur.center.x * focusRect.width,
+                                    centerY = focusRect.top + focusBlur.center.y * focusRect.height,
+                                    radius = focusBlur.focusRadius * min(focusRect.width, focusRect.height)
+                                )
+                            }
+                        }
                         // Softened and pixelated patches sit under the ink and text, matching the
                         // export order; the band under the finger is drawn with the same mask maths.
                         val active = activeBlur
@@ -1768,6 +1867,33 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             drawLine(handleColor, corner, Offset(corner.x, corner.y + handleLength * dy), handleStroke)
                         }
                     }
+                    // The portrait focus circle: drag it to move the sharp area.
+                    if (tab == EditorTab.Blur && !compareOpen && !peekOriginal) {
+                        val focusRect = cropRectIn(imageRect, crop)
+                        if (focusRect.width > 0f && focusRect.height > 0f) {
+                            val center = Offset(
+                                focusRect.left + focusBlur.center.x * focusRect.width,
+                                focusRect.top + focusBlur.center.y * focusRect.height
+                            )
+                            val radius =
+                                (focusBlur.focusRadius * min(focusRect.width, focusRect.height))
+                                    .coerceAtLeast(8.dp.toPx())
+                            drawCircle(Color.White.copy(alpha = 0.10f), radius, center)
+                            drawCircle(
+                                color = Color.Black.copy(alpha = 0.30f),
+                                radius = radius + 1.5.dp.toPx(),
+                                center = center,
+                                style = Stroke(3.dp.toPx())
+                            )
+                            drawCircle(
+                                color = Color.White,
+                                radius = radius,
+                                center = center,
+                                style = Stroke(1.5.dp.toPx())
+                            )
+                            drawCircle(Color.White, 2.5.dp.toPx(), center)
+                        }
+                    }
                     // The eraser and blur brush cursor: a white ring around the area a drag touches,
                     // with a faint shadow ring so it stays visible on white photos.
                     if (tab == EditorTab.Draw && drawMode != DrawMode.Brush &&
@@ -2031,6 +2157,37 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     }
                 }
 
+                EditorTab.Blur -> BlurPanel(
+                    focusRadius = focusBlur.focusRadius,
+                    blurStrength = focusBlur.strength,
+                    bokeh = bokehStyle,
+                    enabled = !saving && preview != null,
+                    onFocusRadiusChange = { value ->
+                        if (focusGestureStart == null) focusGestureStart = snapshot()
+                        val strength =
+                            if (focusBlur.active) focusBlur.strength else DefaultFocusStrength
+                        focusBlur = focusBlur.copy(focusRadius = value, strength = strength)
+                    },
+                    onFocusRadiusFinished = {
+                        focusGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+                        focusGestureStart = null
+                    },
+                    onBlurStrengthChange = { value ->
+                        if (focusGestureStart == null) focusGestureStart = snapshot()
+                        focusBlur = focusBlur.copy(strength = value)
+                    },
+                    onBlurStrengthFinished = {
+                        focusGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
+                        focusGestureStart = null
+                    },
+                    onSelectBokeh = { chosen ->
+                        if (chosen != bokehStyle) {
+                            pushHistory()
+                            bokehStyle = chosen
+                        }
+                    }
+                )
+
                 EditorTab.Draw -> DrawPanel(
                     color = drawColor,
                     brushWidth = drawWidth,
@@ -2081,6 +2238,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     strokeGestureStart = null
                     eraseGestureStart = null
                     blurGestureStart = null
+                    focusGestureStart = null
                     textGestureStart = null
                     textGesture = null
                     toolCursor = null

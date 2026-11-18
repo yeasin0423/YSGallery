@@ -12,10 +12,10 @@ The UI is **Samsung One UI styling only** and **English only**. The upstream pro
 languages (Samsung One UI, Google Gemini, iOS Liquid Glass, Xiaomi HyperOS) and English/German strings;
 this fork intentionally keeps only One UI and English.
 
-This fork is built around its photo editor: crop/rotate/mirror, adjust, filters, bokeh, drawing
-(brush, eraser, blur, mosaic), text labels with fonts, frames, before/after comparison and a
-floating text bar. Videos and GIFs are intentionally not editable (`MediaItem.isImage` gates the entry
-point); do not enable it without a full video pipeline.
+This fork is built around its photo editor: crop/rotate/mirror, adjust, filters, portrait background
+blur, bokeh, drawing (brush, eraser, blur, mosaic), text labels with fonts, frames, before/after
+comparison and a floating text bar. Videos and GIFs are intentionally not editable
+(`MediaItem.isImage` gates the entry point); do not enable it without a full video pipeline.
 
 ## Repository layout
 
@@ -57,11 +57,12 @@ reproduced by the exporter, in this order:
 
 1. mirror, rotate, crop
 2. colour matrix (adjustments combined with the filter)
-3. blur and mosaic patches (`EditorBlur.kt`)
-4. bokeh lights (`EditorBokeh.kt`)
-5. freehand strokes (`EditorDraw.kt`)
-6. text labels (`EditorText.kt`)
-7. frame (`EditorFrame.kt`)
+3. portrait background blur (`EditorFocusBlur.kt`)
+4. blur and mosaic patches (`EditorBlur.kt`)
+5. bokeh lights (`EditorBokeh.kt`)
+6. freehand strokes (`EditorDraw.kt`)
+7. text labels (`EditorText.kt`)
+8. frame (`EditorFrame.kt`)
 
 - `EditSpec` is the single source of truth passed to `saveImage`/`saveVideo`; add new effects there and
   in `EditorSnapshot` (undo), `applySnapshot`, `reset` and the `changed` check.
