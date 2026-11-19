@@ -73,6 +73,7 @@ import androidx.compose.material.icons.rounded.Rotate90DegreesCcw
 import androidx.compose.material.icons.rounded.Rotate90DegreesCw
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -167,6 +168,7 @@ private data class EditorSnapshot(
     val rotation: Int,
     val flipHorizontal: Boolean,
     val flipVertical: Boolean,
+    val straighten: Float,
     val crop: NormalizedRect,
     val ratio: CropRatio,
     val adjustments: EditorAdjustments,
@@ -240,6 +242,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var rotation by remember { mutableIntStateOf(0) }
     var flipHorizontal by remember { mutableStateOf(false) }
     var flipVertical by remember { mutableStateOf(false) }
+    var straighten by remember { mutableFloatStateOf(0f) }
     var crop by remember { mutableStateOf(NormalizedRect.Full) }
     var ratio by remember { mutableStateOf<CropRatio>(CropRatio.Free) }
     var tab by remember { mutableStateOf(EditorTab.Crop) }
@@ -305,6 +308,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var eraseGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var blurGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var focusGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
+    var straightenGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGestureStart by remember { mutableStateOf<EditorSnapshot?>(null) }
     var textGesture by remember { mutableStateOf<TextGesture?>(null) }
 
@@ -329,8 +333,18 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
     var peekOriginal by remember { mutableStateOf(false) }
     var compareSplit by remember { mutableFloatStateOf(0.5f) }
 
-    val preview: ImageBitmap? = remember(source, rotation, flipHorizontal, flipVertical) {
-        source?.let { MediaEditor.transform(it, rotation, flipHorizontal, flipVertical).asImageBitmap() }
+    // Straighten re-renders the whole preview, so it is quantized to half a degree for dragging.
+    val straightenPreview = (straighten * 2f).roundToInt() / 2f
+    val preview: ImageBitmap? = remember(source, rotation, flipHorizontal, flipVertical, straightenPreview) {
+        source?.let {
+            MediaEditor.transform(
+                it,
+                rotation,
+                flipHorizontal,
+                flipVertical,
+                straightenPreview
+            ).asImageBitmap()
+        }
     }
     val frameAspect = preview?.let { it.width.toFloat() / it.height.toFloat() } ?: 1f
     val cropAspect = ratio.normalizedAspect(frameAspect)
@@ -382,7 +396,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             colorFilter = ColorMatrixColorFilter(colorMatrix)
         }
     }
-    val changed = rotation != 0 || flipHorizontal || flipVertical || !crop.isFull ||
+    val changed = rotation != 0 || flipHorizontal || flipVertical || straighten != 0f ||
+            !crop.isFull ||
             !adjustments.isNeutral || filter.id != EditorFilterNone.id || focusBlur.active ||
             bokehStyle != BokehStyle.None ||
             frame != EditorFrame.None || strokes.isNotEmpty() || blurStrokes.isNotEmpty() ||
@@ -401,6 +416,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         rotation = rotation,
         flipHorizontal = flipHorizontal,
         flipVertical = flipVertical,
+        straighten = straighten,
         crop = crop,
         ratio = ratio,
         adjustments = adjustments,
@@ -423,6 +439,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         rotation = state.rotation
         flipHorizontal = state.flipHorizontal
         flipVertical = state.flipVertical
+        straighten = state.straighten
         crop = state.crop
         ratio = state.ratio
         adjustments = state.adjustments
@@ -451,6 +468,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         eraseGestureStart = null
         blurGestureStart = null
         focusGestureStart = null
+        straightenGestureStart = null
         textGestureStart = null
         textGesture = null
         openPanel = EditorPanel.None
@@ -573,6 +591,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         rotation = 0
         flipHorizontal = false
         flipVertical = false
+        straighten = 0f
         crop = NormalizedRect.Full
         ratio = CropRatio.Free
         adjustments = EditorAdjustments()
@@ -1031,6 +1050,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             rotation = rotation,
             flipHorizontal = flipHorizontal,
             flipVertical = flipVertical,
+            straighten = straighten,
             crop = crop,
             colorMatrix = colorMatrix,
             focusBlur = focusBlur,
@@ -1074,6 +1094,7 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
             rotation = rotation,
             flipHorizontal = flipHorizontal,
             flipVertical = flipVertical,
+            straighten = straighten,
             crop = crop,
             colorMatrix = colorMatrix,
             focusBlur = focusBlur,
@@ -2080,6 +2101,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             panel = shownPanel,
                             enabled = !saving && preview != null,
                             ratio = ratio,
+                            straighten = straighten,
+                            onStraightenChange = { value ->
+                                if (straightenGestureStart == null) straightenGestureStart = snapshot()
+                                straighten = value
+                            },
+                            onStraightenFinished = {
+                                straightenGestureStart?.takeIf { it != snapshot() }
+                                    ?.let { pushHistory(it) }
+                                straightenGestureStart = null
+                            },
                             onRotateLeft = { rotate(clockwise = false) },
                             onRotateRight = { rotate(clockwise = true) },
                             onSelectRatio = ::chooseRatio
@@ -2606,6 +2637,9 @@ private fun EditorInlinePanel(
     panel: EditorPanel,
     enabled: Boolean,
     ratio: CropRatio,
+    straighten: Float,
+    onStraightenChange: (Float) -> Unit,
+    onStraightenFinished: () -> Unit,
     onRotateLeft: () -> Unit,
     onRotateRight: () -> Unit,
     onSelectRatio: (CropRatio) -> Unit
@@ -2619,36 +2653,85 @@ private fun EditorInlinePanel(
             .background(palette.surface)
     ) {
         when (panel) {
-            EditorPanel.Rotate -> RotatePanel(enabled, onRotateLeft, onRotateRight)
+            EditorPanel.Rotate -> RotatePanel(
+                enabled = enabled,
+                straighten = straighten,
+                onStraightenChange = onStraightenChange,
+                onStraightenFinished = onStraightenFinished,
+                onRotateLeft = onRotateLeft,
+                onRotateRight = onRotateRight
+            )
             EditorPanel.Ratio -> RatioPicker(ratio, onSelectRatio)
             EditorPanel.None -> Unit
         }
     }
 }
 
-/** Rotate left / rotate right, picked explicitly instead of rotating on every toolbar tap. */
+/**
+ * Free-hand straighten plus the 90° turns. The slider covers -45°..45°, and the photo is grown to
+ * keep the frame full, so a tilt never leaves empty corners.
+ */
 @Composable
-private fun RotatePanel(enabled: Boolean, onRotateLeft: () -> Unit, onRotateRight: () -> Unit) {
-    Row(
+private fun RotatePanel(
+    enabled: Boolean,
+    straighten: Float,
+    onStraightenChange: (Float) -> Unit,
+    onStraightenFinished: () -> Unit,
+    onRotateLeft: () -> Unit,
+    onRotateRight: () -> Unit
+) {
+    val palette = LocalAppTheme.current.palette
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(12.dp)
     ) {
-        PanelAction(
-            icon = Icons.Rounded.Rotate90DegreesCcw,
-            label = strings.rotateLeft,
-            onClick = onRotateLeft,
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 10.dp, end = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = strings.straighten,
+                color = palette.onBackground,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${straighten.roundToInt()}°",
+                color = palette.textMuted,
+                fontSize = 12.sp
+            )
+        }
+        Slider(
+            value = straighten,
+            onValueChange = onStraightenChange,
+            onValueChangeFinished = onStraightenFinished,
+            valueRange = -45f..45f,
             enabled = enabled,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.fillMaxWidth()
         )
-        PanelAction(
-            icon = Icons.Rounded.Rotate90DegreesCw,
-            label = strings.rotateRight,
-            onClick = onRotateRight,
-            enabled = enabled,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            PanelAction(
+                icon = Icons.Rounded.Rotate90DegreesCcw,
+                label = strings.rotateLeft,
+                onClick = onRotateLeft,
+                enabled = enabled,
+                modifier = Modifier.weight(1f)
+            )
+            PanelAction(
+                icon = Icons.Rounded.Rotate90DegreesCw,
+                label = strings.rotateRight,
+                onClick = onRotateRight,
+                enabled = enabled,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

@@ -44,9 +44,12 @@ import java.io.File
 import java.io.FileNotFoundException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import androidx.media3.common.MediaItem as ExoMediaItem
 
 /** Crop rectangle in 0..1 coordinates of the rotated/flipped frame (y grows downwards). */
@@ -85,6 +88,8 @@ data class EditSpec(
     val rotation: Int,
     val flipHorizontal: Boolean,
     val flipVertical: Boolean,
+    /** Free-hand straighten in degrees, applied after the quarter turns and before the crop. */
+    val straighten: Float = 0f,
     val crop: NormalizedRect,
     val colorMatrix: FloatArray? = null,
     val focusBlur: FocusBlur = FocusBlur(),
@@ -130,14 +135,64 @@ object MediaEditor {
         }.getOrNull()
     }
 
-    /** Applies mirroring and then a clockwise rotation (the preview and export share this order). */
-    fun transform(source: Bitmap, rotation: Int, flipHorizontal: Boolean, flipVertical: Boolean): Bitmap {
-        if (rotation % 360 == 0 && !flipHorizontal && !flipVertical) return source
-        val matrix = Matrix().apply {
-            postScale(if (flipHorizontal) -1f else 1f, if (flipVertical) -1f else 1f, source.width / 2f, source.height / 2f)
-            postRotate(rotation.toFloat())
+    /**
+     * Applies mirroring, then a clockwise quarter rotation, then [straighten] (the preview and export
+     * share this order). Straightening grows the photo just enough to keep the frame full; its size
+     * and crop therefore do not change.
+     */
+    fun transform(
+        source: Bitmap,
+        rotation: Int,
+        flipHorizontal: Boolean,
+        flipVertical: Boolean,
+        straighten: Float = 0f
+    ): Bitmap {
+        val angled = straighten % 360f != 0f
+        if (rotation % 360 == 0 && !flipHorizontal && !flipVertical && !angled) return source
+        if (!angled) {
+            val matrix = Matrix().apply {
+                postScale(if (flipHorizontal) -1f else 1f, if (flipVertical) -1f else 1f, source.width / 2f, source.height / 2f)
+                postRotate(rotation.toFloat())
+            }
+            return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
         }
-        return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+        // Mirroring and the quarter turn first, so the straighten scale is measured on the frame the
+        // user actually sees.
+        val quarter = if (rotation % 360 == 0 && !flipHorizontal && !flipVertical) {
+            source
+        } else {
+            val matrix = Matrix().apply {
+                postScale(if (flipHorizontal) -1f else 1f, if (flipVertical) -1f else 1f, source.width / 2f, source.height / 2f)
+                postRotate(rotation.toFloat())
+            }
+            Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+        }
+        val straightened = straightenBitmap(quarter, straighten)
+        if (quarter !== source && quarter !== straightened) quarter.recycle()
+        return straightened
+    }
+
+    /** Rotates [source] by [degrees] inside its own bounds, scaling up so no empty corner shows. */
+    private fun straightenBitmap(source: Bitmap, degrees: Float): Bitmap {
+        if (degrees % 360f == 0f) return source
+        val width = source.width
+        val height = source.height
+        if (width < 2 || height < 2) return source
+        val radians = Math.toRadians(abs(degrees).toDouble())
+        val c = abs(cos(radians)).toFloat()
+        val s = abs(sin(radians)).toFloat()
+        val scale = max(
+            (c * width + s * height) / width,
+            (s * width + c * height) / height
+        )
+        val output = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        canvas.translate(width / 2f, height / 2f)
+        canvas.rotate(degrees)
+        canvas.scale(scale, scale)
+        canvas.translate(-width / 2f, -height / 2f)
+        canvas.drawBitmap(source, 0f, 0f, Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+        return output
     }
 
     private fun decodeImage(context: Context, uri: Uri, maxSize: Int): Bitmap {
@@ -287,7 +342,13 @@ object MediaEditor {
         overwrite: Boolean
     ): RenderedImage {
         val decoded = decodeImage(context, item.uri, MAX_EXPORT_SIDE)
-        val transformed = transform(decoded, spec.rotation, spec.flipHorizontal, spec.flipVertical)
+        val transformed = transform(
+            decoded,
+            spec.rotation,
+            spec.flipHorizontal,
+            spec.flipVertical,
+            spec.straighten
+        )
         val crop = spec.crop
         val x = (crop.left * transformed.width).roundToInt().coerceIn(0, transformed.width - 1)
         val y = (crop.top * transformed.height).roundToInt().coerceIn(0, transformed.height - 1)
