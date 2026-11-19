@@ -42,9 +42,6 @@ const val MinFocusRadius = 0.08f
 /** The largest sharp circle; beyond this the background blur has nothing left to soften. */
 const val MaxFocusRadius = 0.55f
 
-/** The blur used when the focus circle is first moved, so placing it shows the effect at once. */
-const val DefaultFocusStrength = 0.45f
-
 /**
  * The softened copy is built on a copy whose short side is at most this many pixels. The blur keeps
  * its radius in this space, so cost does not depend on the photo's megapixels, and the upscale back

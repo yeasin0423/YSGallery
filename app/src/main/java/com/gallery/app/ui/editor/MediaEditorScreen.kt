@@ -1337,11 +1337,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     var transformed = false
                                     if (moving) {
                                         focusGestureStart = snapshot()
-                                        // Placing the circle is the moment the effect should be
-                                        // visible, so a fresh page starts with a gentle blur.
-                                        if (!focusBlur.active) {
-                                            focusBlur = focusBlur.copy(strength = DefaultFocusStrength)
-                                        }
+                                        // Moving the circle never changes the blur intensity: the
+                                        // slider on its own decides how soft the background is.
                                         focusBlur = focusBlur.copy(center = focusPoint(down.position, rect))
                                     }
                                     while (true) {
@@ -2197,9 +2194,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                     enabled = !saving && preview != null,
                     onFocusRadiusChange = { value ->
                         if (focusGestureStart == null) focusGestureStart = snapshot()
-                        val strength =
-                            if (focusBlur.active) focusBlur.strength else DefaultFocusStrength
-                        focusBlur = focusBlur.copy(focusRadius = value, strength = strength)
+                        // Resizing the circle must not switch the blur on; the intensity slider is
+                        // the only control that does.
+                        focusBlur = focusBlur.copy(focusRadius = value)
                     },
                     onFocusRadiusFinished = {
                         focusGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
