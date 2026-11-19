@@ -427,7 +427,7 @@ object EnglishStrings : AppStrings {
     override val move = "Move"
     override val collage = "Collage"
     override val collageChooseTemplate = "Please select template"
-    override val collageGestures = "Tap a photo to select it. Drag to move, pinch to zoom, twist to rotate, and drop it on another photo to swap."
+    override val collageGestures = "Tap to select or deselect. Drag to move, pinch to zoom and twist to rotate. Drop a photo on another one to swap."
     override val collageSaved = "Collage saved"
     override val share = "Share"
     override val send = "Send"

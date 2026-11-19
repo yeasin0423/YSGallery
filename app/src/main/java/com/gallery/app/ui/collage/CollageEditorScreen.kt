@@ -139,12 +139,13 @@ fun CollageEditorScreen(
     }
 
     /**
-     * Panning a photo that still fills its cell moves it freely so it can be dropped on another
-     * cell; once it is zoomed or rotated the pan is clamped to keep the cell covered.
+     * A drag at the fitted base framing moves the photo freely so it can be dropped on another
+     * cell; once it is zoomed or rotated the pan is clamped. Returns true while this step is still
+     * a base drag, which is the only kind that can swap.
      */
-    fun transform(index: Int, pan: Offset, zoom: Float, rotation: Float) {
-        val cell = cellRect(index) ?: return
-        val current = frames.getOrNull(index) ?: return
+    fun transform(index: Int, pan: Offset, zoom: Float, rotation: Float): Boolean {
+        val cell = cellRect(index) ?: return false
+        val current = frames.getOrNull(index) ?: return false
         val width = cell.width.coerceAtLeast(1f)
         val height = cell.height.coerceAtLeast(1f)
         val bitmap = bitmaps.getOrNull(index)
@@ -158,6 +159,8 @@ fun CollageEditorScreen(
                 offsetX = current.offsetX + pan.x / width,
                 offsetY = current.offsetY + pan.y / height
             )
+            changed = true
+            return true
         } else {
             val zoomed = current.copy(
                 zoom = (current.zoom * zoom).coerceIn(1f, 4f),
@@ -173,10 +176,13 @@ fun CollageEditorScreen(
             )
         }
         changed = true
+        return false
     }
 
-    fun release(index: Int, position: Offset) {
-        val target = slotAt(position)
+    fun release(index: Int, position: Offset, baseDrag: Boolean) {
+        // A swap only happens on a one-finger drag that never zoomed or twisted the photo; otherwise
+        // panning a zoomed photo could drop it on a neighbour and look like the photos swapped.
+        val target = if (baseDrag) slotAt(position) else null
         if (target != null && target != index) {
             val swapped = bitmaps.toMutableList()
             if (index in swapped.indices && target in swapped.indices) {
@@ -302,13 +308,17 @@ fun CollageEditorScreen(
                             collageGestures(
                                 layout = layout,
                                 onSelect = { selectedIndex = it },
+                                onTap = { index ->
+                                    selectedIndex =
+                                        if (index == null || selectedIndex == index) null else index
+                                },
                                 onTransform = { index, pan, zoom, rotation ->
                                     interacting = true
                                     transform(index, pan, zoom, rotation)
                                 },
-                                onRelease = { index, position ->
+                                onRelease = { index, position, baseDrag ->
                                     interacting = false
-                                    release(index, position)
+                                    release(index, position, baseDrag)
                                 }
                             )
                         }
@@ -494,52 +504,68 @@ private fun collageSlotAt(layout: CollageLayout, page: Rect, position: Offset): 
 }
 
 /**
- * One-finger drag pans a photo (or starts a swap when it still fills its cell), and two fingers
- * zoom and twist it. The photo under the first finger becomes the selection immediately.
+ * Tap selects a photo and tapping it or the page background again clears the selection; one-finger
+ * drag pans (or swaps when the photo still rests at its fitted base framing); two fingers zoom and
+ * twist. A two-finger gesture never changes the selection.
  */
 private suspend fun PointerInputScope.collageGestures(
     layout: CollageLayout,
     onSelect: (Int?) -> Unit,
-    onTransform: (Int, Offset, Float, Float) -> Unit,
-    onRelease: (Int, Offset) -> Unit
+    onTap: (Int?) -> Unit,
+    onTransform: (Int, Offset, Float, Float) -> Boolean,
+    onRelease: (Int, Offset, Boolean) -> Unit
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         val page = collagePageRect(size.width.toFloat(), size.height.toFloat())
         val index = collageSlotAt(layout, page, down.position)
-        onSelect(index)
-        if (index == null) return@awaitEachGesture
-
+        var multiTouch = false
         var pastTouchSlop = false
+        var baseDrag = false
         var panTotal = Offset.Zero
         var zoomTotal = 1f
         var rotationTotal = 0f
         var lastPosition = down.position
-        do {
+        var canceled = false
+        while (true) {
             val event = awaitPointerEvent()
-            val canceled = event.changes.any { it.isConsumed }
-            if (!canceled) {
-                val pan = event.calculatePan()
-                val zoom = event.calculateZoom()
-                val rotation = event.calculateRotation()
-                panTotal += pan
-                zoomTotal *= zoom
-                rotationTotal += rotation
-                if (!pastTouchSlop) {
-                    val centroidSize = event.calculateCentroidSize(useCurrent = false)
-                    val motion = panTotal.getDistance() +
-                        abs(1f - zoomTotal) * centroidSize +
-                        abs(rotationTotal * PI.toFloat() / 180f) * centroidSize
-                    if (motion > viewConfiguration.touchSlop) pastTouchSlop = true
-                }
-                if (pastTouchSlop) {
-                    event.changes.firstOrNull { it.pressed }?.let { lastPosition = it.position }
-                    onTransform(index, pan, zoom, rotation)
-                    event.changes.forEach { if (it.positionChanged()) it.consume() }
-                }
+            canceled = event.changes.any { it.isConsumed }
+            if (canceled) break
+            if (event.changes.count { it.pressed } >= 2) multiTouch = true
+            val pan = event.calculatePan()
+            val zoom = event.calculateZoom()
+            val rotation = event.calculateRotation()
+            panTotal += pan
+            zoomTotal *= zoom
+            rotationTotal += rotation
+            if (!pastTouchSlop) {
+                val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                val motion = panTotal.getDistance() +
+                    abs(1f - zoomTotal) * centroidSize +
+                    abs(rotationTotal * PI.toFloat() / 180f) * centroidSize
+                if (motion > viewConfiguration.touchSlop) pastTouchSlop = true
             }
-        } while (!canceled && event.changes.any { it.pressed })
-        if (pastTouchSlop) onRelease(index, lastPosition)
+            if (pastTouchSlop && index != null) {
+                event.changes.firstOrNull { it.pressed }?.let { lastPosition = it.position }
+                if (onTransform(index, pan, zoom, rotation)) baseDrag = true
+                event.changes.forEach { if (it.positionChanged()) it.consume() }
+            }
+            if (event.changes.none { it.pressed }) break
+        }
+        // The selection is only touched once the gesture is over and is known to be one-finger, so
+        // a pinch or twist can never select or deselect anything.
+        if (canceled) {
+            if (index != null && pastTouchSlop) onRelease(index, lastPosition, false)
+        } else if (index == null) {
+            if (!multiTouch) {
+                if (pastTouchSlop) onSelect(null) else onTap(null)
+            }
+        } else if (pastTouchSlop) {
+            if (!multiTouch) onSelect(index)
+            onRelease(index, lastPosition, baseDrag && !multiTouch)
+        } else if (!multiTouch) {
+            onTap(index)
+        }
     }
 }
 
