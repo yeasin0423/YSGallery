@@ -118,32 +118,42 @@ object CollageRenderer {
             canvas.restoreToCount(save)
             return
         }
+        val (contentWidth, contentHeight) =
+            fitContent(inner.width(), inner.height(), bitmap.width, bitmap.height)
         // A frame that is being dragged out of its cell is drawn where the finger put it; a settled
         // frame is kept covering the cell after any rotation or zoom.
         val applied = when {
             framing == null -> null
             framing.atBase -> framing
-            else -> framing.clamped(inner.width(), inner.height())
+            else -> framing.clamped(inner.width(), inner.height(), contentWidth, contentHeight)
         }
-        if (applied != null &&
-            (applied.offsetX != 0f || applied.offsetY != 0f ||
-                applied.zoom != 1f || applied.rotation != 0f)
-        ) {
-            val scale = applied.effectiveScale(inner.width(), inner.height())
-            canvas.translate(
-                inner.centerX() + applied.offsetX * inner.width(),
-                inner.centerY() + applied.offsetY * inner.height()
-            )
-            canvas.rotate(applied.rotation)
-            canvas.scale(scale, scale)
-            canvas.translate(-inner.centerX(), -inner.centerY())
-        }
+        // The photo is never cropped at its base framing, so the letterbox around it is filled with a
+        // dim, cover-cropped copy of the same photo instead of an empty bar.
+        val backdrop = Paint(paint).apply { alpha = 0x40 }
         canvas.drawBitmap(
             bitmap,
             centerCropSource(bitmap, inner.width() / inner.height()),
             inner,
+            backdrop
+        )
+        val zoom = applied?.zoom ?: 1f
+        val rotation = applied?.rotation ?: 0f
+        val offsetX = applied?.offsetX ?: 0f
+        val offsetY = applied?.offsetY ?: 0f
+        val photo = canvas.save()
+        canvas.translate(
+            inner.centerX() + offsetX * inner.width(),
+            inner.centerY() + offsetY * inner.height()
+        )
+        canvas.rotate(rotation)
+        canvas.scale(zoom, zoom)
+        canvas.drawBitmap(
+            bitmap,
+            null,
+            RectF(-contentWidth / 2f, -contentHeight / 2f, contentWidth / 2f, contentHeight / 2f),
             paint
         )
+        canvas.restoreToCount(photo)
         canvas.restoreToCount(save)
     }
 

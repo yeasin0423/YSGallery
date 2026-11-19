@@ -147,6 +147,12 @@ fun CollageEditorScreen(
         val current = frames.getOrNull(index) ?: return
         val width = cell.width.coerceAtLeast(1f)
         val height = cell.height.coerceAtLeast(1f)
+        val bitmap = bitmaps.getOrNull(index)
+        val (contentWidth, contentHeight) = if (bitmap == null) {
+            width to height
+        } else {
+            fitContent(width, height, bitmap.width, bitmap.height)
+        }
         if (current.atBase && zoom == 1f && rotation == 0f) {
             frames[index] = current.copy(
                 offsetX = current.offsetX + pan.x / width,
@@ -157,7 +163,14 @@ fun CollageEditorScreen(
                 zoom = (current.zoom * zoom).coerceIn(1f, 4f),
                 rotation = normalizeDegrees(current.rotation + rotation)
             )
-            frames[index] = zoomed.panned(pan.x / width, pan.y / height, width, height)
+            frames[index] = zoomed.panned(
+                pan.x / width,
+                pan.y / height,
+                width,
+                height,
+                contentWidth,
+                contentHeight
+            )
         }
         changed = true
     }
@@ -179,7 +192,18 @@ fun CollageEditorScreen(
             return
         }
         val cell = cellRect(index) ?: return
-        frames[index] = frames[index].clamped(cell.width, cell.height)
+        val bitmap = bitmaps.getOrNull(index)
+        val (contentWidth, contentHeight) = if (bitmap == null) {
+            cell.width to cell.height
+        } else {
+            fitContent(cell.width, cell.height, bitmap.width, bitmap.height)
+        }
+        frames[index] = frames[index].clamped(
+            cell.width,
+            cell.height,
+            contentWidth,
+            contentHeight
+        )
     }
 
     LaunchedEffect(items) {
