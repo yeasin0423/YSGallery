@@ -6,12 +6,10 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /** Draws a [CollageLayout] onto a bitmap for the live preview and for saving. */
 object CollageRenderer {
@@ -127,15 +125,8 @@ object CollageRenderer {
             framing.atBase -> framing
             else -> framing.clamped(inner.width(), inner.height(), contentWidth, contentHeight)
         }
-        // The photo is never cropped at its base framing, so the letterbox around it is filled with a
-        // dim, cover-cropped copy of the same photo instead of an empty bar.
-        val backdrop = Paint(paint).apply { alpha = 0x40 }
-        canvas.drawBitmap(
-            bitmap,
-            centerCropSource(bitmap, inner.width() / inner.height()),
-            inner,
-            backdrop
-        )
+        // The whole photo is drawn, never a crop: the space left over shows the cell's mat or the
+        // page background, so nothing suggests an area was cut away.
         val zoom = applied?.zoom ?: 1f
         val rotation = applied?.rotation ?: 0f
         val offsetX = applied?.offsetX ?: 0f
@@ -299,23 +290,6 @@ object CollageRenderer {
                 left + slot.right * (right - left) - gap / 2f,
                 top + slot.bottom * (bottom - top) - gap / 2f
             )
-        }
-    }
-
-    /** The largest centre crop of [source] that matches [targetAspect] (width / height). */
-    private fun centerCropSource(source: Bitmap, targetAspect: Float): Rect {
-        val width = source.width
-        val height = source.height
-        if (width <= 0 || height <= 0) return Rect(0, 0, 1, 1)
-        val aspect = width.toFloat() / height
-        return if (aspect > targetAspect) {
-            val cropWidth = (height * targetAspect).roundToInt().coerceIn(1, width)
-            val x = (width - cropWidth) / 2
-            Rect(x, 0, x + cropWidth, height)
-        } else {
-            val cropHeight = (width / targetAspect).roundToInt().coerceIn(1, height)
-            val y = (height - cropHeight) / 2
-            Rect(0, y, width, y + cropHeight)
         }
     }
 }
