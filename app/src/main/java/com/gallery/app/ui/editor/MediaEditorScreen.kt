@@ -84,6 +84,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -146,8 +147,10 @@ import com.gallery.app.ui.design.pressScale
 import com.gallery.app.ui.i18n.strings
 import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.theme.onAccent
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -373,12 +376,23 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
         if (!mosaicActive) null else preview?.let { pixelatedBitmap(it.asAndroidBitmap()) }
     }
     // The blurred background under the portrait effect; the sharp subject is redrawn on top. The
-    // strength is quantized so dragging the slider re-blurs in small steps instead of rebuilding the
-    // whole copy for every pixel of travel.
-    val focusPreviewStrength = (focusBlur.strength * 25f).roundToInt() / 25f
-    val focusPreview = remember(preview, focusPreviewStrength) {
-        if (!focusBlur.active) null else preview?.let {
-            focusBlurredBitmap(it.asAndroidBitmap(), focusPreviewStrength)
+    // strength is quantized so dragging the slider re-blurs in a handful of steps, and the blur
+    // itself runs off the UI thread while the previous copy stays on screen, so the slider keeps
+    // moving smoothly.
+    val focusPreviewStrength = (focusBlur.strength * 10f).roundToInt() / 10f
+    val focusPreview by produceState<Bitmap?>(
+        initialValue = null,
+        preview,
+        focusPreviewStrength,
+        focusBlur.active
+    ) {
+        val source = preview
+        value = if (!focusBlur.active || source == null) {
+            null
+        } else {
+            withContext(Dispatchers.Default) {
+                focusBlurredBitmap(source.asAndroidBitmap(), focusPreviewStrength)
+            }
         }
     }
     // The same colour matrix the photo is drawn with, so a softened or pixelated patch matches its
