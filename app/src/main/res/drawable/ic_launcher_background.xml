@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher background: the same violet-to-coral gradient as the icon artwork, so the flower
+     sits directly on it inside whatever mask the launcher uses. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="45"
+        android:startColor="#6923FD"
+        android:centerColor="#D91FA8"
+        android:endColor="#FC4D5E"
+        android:type="linear" />
+</shape>

@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="black">#000000</color>
-    <!-- The pink behind the launcher artwork; adaptive icons have no transparent corners. -->
-    <color name="ic_launcher_background">#CE0065</color>
 </resources>

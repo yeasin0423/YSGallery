@@ -108,12 +108,12 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
   always returns `EnglishStrings`. Do not reintroduce a language picker or `GermanStrings`.
 - The manifest has a single launcher alias, `.LauncherOneUi`. `LauncherIcon.apply` also disables the old
   Gemini/iOS/HyperOS aliases from previous builds.
-- Launcher icons are adaptive: `res/mipmap-anydpi-v26/ic_launcher*.xml` use the solid pink
-  `@color/ic_launcher_background` plus `@mipmap/ic_launcher_foreground`, all rendered from the
-  repository's `latest.svg`. The legacy squircle PNGs in `res/mipmap-*dpi/` stay as fallbacks. The
-  adaptive background is what keeps launchers from drawing a white plate around the artwork. The
-  foreground art is centred at two thirds of the 108dp layer: the 72dp mask then shows the artwork at
-  its natural size instead of zooming it to the layer bounds.
+- Launcher icons are adaptive: `res/mipmap-anydpi-v26/ic_launcher*.xml` use the gradient
+  `@drawable/ic_launcher_background` plus `@mipmap/ic_launcher_foreground`, all rendered from
+  `docs/assets/logo.png`. The legacy squircle PNGs in `res/mipmap-*dpi/` stay as fallbacks. The
+  adaptive background keeps launchers from drawing a white plate around the artwork; the foreground is
+  the flower alone, centred at 78% of the 108dp layer, so the mask shows a large flower without
+  clipping its petals.
 - The settings hub shows only section titles. Counts, storage summaries and version numbers belong on
   the pushed pages, not in the list rows.
 - Legacy `amoled_gallery_*` SharedPreferences names are kept intentionally so existing settings survive.
