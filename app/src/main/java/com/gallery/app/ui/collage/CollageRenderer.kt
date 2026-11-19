@@ -27,7 +27,8 @@ object CollageRenderer {
         layout: CollageLayout,
         bitmaps: List<Bitmap?>,
         width: Int,
-        height: Int
+        height: Int,
+        frames: List<CollageFrame> = emptyList()
     ): Bitmap {
         val safeWidth = width.coerceAtLeast(1)
         val safeHeight = height.coerceAtLeast(1)
@@ -45,10 +46,11 @@ object CollageRenderer {
                 bitmap = bitmaps.getOrNull(index),
                 rect = rect,
                 shape = slotShape,
-                frame = layout.frame,
                 frameWidth = layout.frameWidth,
                 corner = corner,
-                paint = paint
+                paint = paint,
+                mat = layout.frame,
+                framing = frames.getOrNull(index)
             )
         }
 
@@ -91,17 +93,18 @@ object CollageRenderer {
         bitmap: Bitmap?,
         rect: RectF,
         shape: CollageShape,
-        frame: Int?,
+        mat: Int?,
         frameWidth: Float,
         corner: Float,
-        paint: Paint
+        paint: Paint,
+        framing: CollageFrame?
     ) {
         val area = shapeRect(rect, shape)
-        if (frame != null) {
-            val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = frame }
+        if (mat != null) {
+            val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = mat }
             canvas.drawPath(shapePath(area, shape, corner), framePaint)
         }
-        val inset = if (frame != null) min(area.width(), area.height()) * frameWidth else 0f
+        val inset = if (mat != null) min(area.width(), area.height()) * frameWidth else 0f
         val inner = RectF(
             area.left + inset,
             area.top + inset,
@@ -112,14 +115,35 @@ object CollageRenderer {
         canvas.clipPath(shapePath(inner, shape, corner))
         if (bitmap == null || bitmap.isRecycled) {
             canvas.drawRect(inner, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFE4E4E4.toInt() })
-        } else {
-            canvas.drawBitmap(
-                bitmap,
-                centerCropSource(bitmap, inner.width() / inner.height()),
-                inner,
-                paint
-            )
+            canvas.restoreToCount(save)
+            return
         }
+        // A frame that is being dragged out of its cell is drawn where the finger put it; a settled
+        // frame is kept covering the cell after any rotation or zoom.
+        val applied = when {
+            framing == null -> null
+            framing.atBase -> framing
+            else -> framing.clamped(inner.width(), inner.height())
+        }
+        if (applied != null &&
+            (applied.offsetX != 0f || applied.offsetY != 0f ||
+                applied.zoom != 1f || applied.rotation != 0f)
+        ) {
+            val scale = applied.effectiveScale(inner.width(), inner.height())
+            canvas.translate(
+                inner.centerX() + applied.offsetX * inner.width(),
+                inner.centerY() + applied.offsetY * inner.height()
+            )
+            canvas.rotate(applied.rotation)
+            canvas.scale(scale, scale)
+            canvas.translate(-inner.centerX(), -inner.centerY())
+        }
+        canvas.drawBitmap(
+            bitmap,
+            centerCropSource(bitmap, inner.width() / inner.height()),
+            inner,
+            paint
+        )
         canvas.restoreToCount(save)
     }
 
