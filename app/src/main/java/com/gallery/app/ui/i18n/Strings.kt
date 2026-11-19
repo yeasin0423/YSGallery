@@ -52,6 +52,7 @@ interface AppStrings {
     val rotateLeft: String
     val rotateRight: String
     val straighten: String
+    val straightenHint: String
     val flipHorizontal: String
     val flipVertical: String
     val editSaved: String
@@ -439,6 +440,7 @@ object EnglishStrings : AppStrings {
     override val rotateLeft = "Rotate left"
     override val rotateRight = "Rotate right"
     override val straighten = "Straighten"
+    override val straightenHint = "Twist the photo with two fingers"
     override val flipHorizontal = "Mirror"
     override val flipVertical = "Flip"
     override val editSaved = "Saved as a copy"

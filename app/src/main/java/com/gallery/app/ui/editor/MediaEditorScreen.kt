@@ -30,6 +30,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -73,7 +74,6 @@ import androidx.compose.material.icons.rounded.Rotate90DegreesCcw
 import androidx.compose.material.icons.rounded.Rotate90DegreesCw
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -1316,7 +1316,8 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             baseWidth,
                             baseHeight,
                             compareOpen,
-                            peekOriginal
+                            peekOriginal,
+                            shownPanel
                         ) {
                             // The split view owns the photo while it is open, and holds are read-only.
                             if (compareOpen || peekOriginal) return@pointerInput
@@ -1548,6 +1549,16 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                         activeHandle = CropHandle.NONE
                                         transformed = true
                                         event.changes.forEach { it.consume() }
+                                        // With the rotate tools open, a twist turns the photo itself,
+                                        // exactly like twisting a collage photo. Free turn: the
+                                        // angle is not capped, the photo is grown to stay full.
+                                        val twist = event.calculateRotation()
+                                        if (shownPanel == EditorPanel.Rotate && twist != 0f) {
+                                            if (straightenGestureStart == null) {
+                                                straightenGestureStart = snapshot()
+                                            }
+                                            straighten = normalizeAngle(straighten + twist)
+                                        }
                                         applyTransform(
                                             zoomChange = event.calculateZoom(),
                                             pan = event.calculatePan(),
@@ -1574,6 +1585,9 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                     cropGestureStart?.takeIf { it != snapshot() }?.let { pushHistory(it) }
                                 }
                                 cropGestureStart = null
+                                straightenGestureStart?.takeIf { it != snapshot() }
+                                    ?.let { pushHistory(it) }
+                                straightenGestureStart = null
                             }
                         }
                 ) {
@@ -2099,14 +2113,11 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                             enabled = !saving && preview != null,
                             ratio = ratio,
                             straighten = straighten,
-                            onStraightenChange = { value ->
-                                if (straightenGestureStart == null) straightenGestureStart = snapshot()
-                                straighten = value
-                            },
-                            onStraightenFinished = {
-                                straightenGestureStart?.takeIf { it != snapshot() }
-                                    ?.let { pushHistory(it) }
-                                straightenGestureStart = null
+                            onStraightenReset = {
+                                if (straighten != 0f) {
+                                    pushHistory()
+                                    straighten = 0f
+                                }
                             },
                             onRotateLeft = { rotate(clockwise = false) },
                             onRotateRight = { rotate(clockwise = true) },
@@ -2635,8 +2646,7 @@ private fun EditorInlinePanel(
     enabled: Boolean,
     ratio: CropRatio,
     straighten: Float,
-    onStraightenChange: (Float) -> Unit,
-    onStraightenFinished: () -> Unit,
+    onStraightenReset: () -> Unit,
     onRotateLeft: () -> Unit,
     onRotateRight: () -> Unit,
     onSelectRatio: (CropRatio) -> Unit
@@ -2653,8 +2663,7 @@ private fun EditorInlinePanel(
             EditorPanel.Rotate -> RotatePanel(
                 enabled = enabled,
                 straighten = straighten,
-                onStraightenChange = onStraightenChange,
-                onStraightenFinished = onStraightenFinished,
+                onStraightenReset = onStraightenReset,
                 onRotateLeft = onRotateLeft,
                 onRotateRight = onRotateRight
             )
@@ -2665,15 +2674,14 @@ private fun EditorInlinePanel(
 }
 
 /**
- * Free-hand straighten plus the 90° turns. The slider covers -45°..45°, and the photo is grown to
- * keep the frame full, so a tilt never leaves empty corners.
+ * The 90° turns plus a reminder that a two-finger twist straightens the photo directly. The current
+ * angle doubles as a reset target once the photo has been tilted.
  */
 @Composable
 private fun RotatePanel(
     enabled: Boolean,
     straighten: Float,
-    onStraightenChange: (Float) -> Unit,
-    onStraightenFinished: () -> Unit,
+    onStraightenReset: () -> Unit,
     onRotateLeft: () -> Unit,
     onRotateRight: () -> Unit
 ) {
@@ -2690,26 +2698,24 @@ private fun RotatePanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = strings.straighten,
-                color = palette.onBackground,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "${straighten.roundToInt()}°",
+                text = strings.straightenHint,
                 color = palette.textMuted,
                 fontSize = 12.sp
             )
+            Spacer(modifier = Modifier.weight(1f))
+            if (straighten != 0f && enabled) {
+                Text(
+                    text = "${straighten.roundToInt()}° · ${strings.reset}",
+                    color = palette.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable { onStraightenReset() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
         }
-        Slider(
-            value = straighten,
-            onValueChange = onStraightenChange,
-            onValueChangeFinished = onStraightenFinished,
-            valueRange = -45f..45f,
-            enabled = enabled,
-            modifier = Modifier.fillMaxWidth()
-        )
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -3065,4 +3071,12 @@ private tailrec fun android.content.Context.findActivity(): android.app.Activity
     is android.app.Activity -> this
     is android.content.ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/** Keeps a free turn readable: -180..180 degrees. */
+private fun normalizeAngle(value: Float): Float {
+    var degrees = value % 360f
+    if (degrees > 180f) degrees -= 360f
+    if (degrees < -180f) degrees += 360f
+    return degrees
 }
