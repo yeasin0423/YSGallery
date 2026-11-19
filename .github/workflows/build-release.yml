@@ -41,8 +41,8 @@ jobs:
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
 
-      # Every workflow run publishes a (previously empty) GitHub release, so the maintainer can sign the
-      # APK locally and attach it there. The APK itself is deliberately not uploaded: it is unsigned.
+      # Publishes the build and attaches the unsigned APK to the release, so it can be downloaded as a
+      # plain .apk instead of being unpacked from the artifact zip. The maintainer signs it locally.
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,7 +63,10 @@ jobs:
             BODY="${BODY}"$'\n\n'"${COMMIT_BODY}"
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; leaving it as is."
+            echo "Release $TAG already exists; refreshing its APK."
           else
             gh release create "$TAG" --target "${{ github.sha }}" --title "$TITLE" --notes "$BODY"
           fi
+          gh release upload "$TAG" \
+            "app/build/outputs/apk/release/app-release-unsigned.apk#Gallery-unsigned-${VERSION_NAME}.apk" \
+            --clobber

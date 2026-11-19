@@ -94,7 +94,8 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
     repository's `v2.7-b12` release when the normal download fails, verifies the same SHA-256 and runs
     that `gradle` directly.
   Never commit the Gradle distribution to the repository again; use the mirror workflow instead.
-- The workflow uploads `app-release-unsigned.apk` as `Gallery-unsigned-<ref>`.
+- The workflow uploads `app-release-unsigned.apk` as `Gallery-unsigned-<ref>` and attaches the same
+  unsigned APK to the GitHub release for direct download.
 - The release APK is unsigned unless a git-ignored `keystore.properties` exists.
 - Keep the R8 `8.8.34` pin in the root `build.gradle.kts`; changing it breaks the reproducible build.
 - Kotlin/JVM target is 17, `compileSdk`/`targetSdk` 34, `minSdk` 29.
