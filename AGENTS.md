@@ -112,8 +112,8 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
   `@drawable/ic_launcher_background` plus `@mipmap/ic_launcher_foreground`, all rendered from
   `docs/assets/logo.png`. The legacy squircle PNGs in `res/mipmap-*dpi/` stay as fallbacks. The
   adaptive background keeps launchers from drawing a white plate around the artwork; the foreground is
-  the flower alone, centred at 78% of the 108dp layer, so the mask shows a large flower without
-  clipping its petals.
+  the flower alone, centred at 60% of the 108dp layer, matching the master artwork's own flower
+  size so launchers do not zoom it.
 - The settings hub shows only section titles. Counts, storage summaries and version numbers belong on
   the pushed pages, not in the list rows.
 - Legacy `amoled_gallery_*` SharedPreferences names are kept intentionally so existing settings survive.
