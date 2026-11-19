@@ -1563,21 +1563,24 @@ fun MediaEditorScreen(item: MediaItem, onClose: () -> Unit) {
                                         activeHandle = CropHandle.NONE
                                         transformed = true
                                         event.changes.forEach { it.consume() }
-                                        // With the rotate tools open, a twist turns the photo itself,
-                                        // exactly like twisting a collage photo. Free turn: the
-                                        // angle is not capped, the photo is grown to stay full.
+                                        // With the rotate tools open, the second finger exists only
+                                        // to turn the photo: the preview is not zoomed or panned at
+                                        // the same time, which made twisting hard to control.
                                         val twist = event.calculateRotation()
-                                        if (shownPanel == EditorPanel.Rotate && twist != 0f) {
-                                            if (straightenGestureStart == null) {
-                                                straightenGestureStart = snapshot()
+                                        if (shownPanel == EditorPanel.Rotate) {
+                                            if (twist != 0f) {
+                                                if (straightenGestureStart == null) {
+                                                    straightenGestureStart = snapshot()
+                                                }
+                                                straighten = normalizeAngle(straighten + twist)
                                             }
-                                            straighten = normalizeAngle(straighten + twist)
+                                        } else {
+                                            applyTransform(
+                                                zoomChange = event.calculateZoom(),
+                                                pan = event.calculatePan(),
+                                                centroid = event.calculateCentroid(useCurrent = true)
+                                            )
                                         }
-                                        applyTransform(
-                                            zoomChange = event.calculateZoom(),
-                                            pan = event.calculatePan(),
-                                            centroid = event.calculateCentroid(useCurrent = true)
-                                        )
                                     } else if (!transformed && handle != CropHandle.NONE) {
                                         val change = event.changes.firstOrNull { it.id == down.id }
                                         if (change != null && change.pressed) {
