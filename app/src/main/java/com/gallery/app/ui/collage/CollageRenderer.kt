@@ -116,8 +116,11 @@ object CollageRenderer {
             canvas.restoreToCount(save)
             return
         }
+        // The fitted size depends on the turn, so a rotated photo shrinks to stay whole instead of
+        // having its edges clipped away.
+        val rotation = framing?.rotation ?: 0f
         val (contentWidth, contentHeight) =
-            fitContent(inner.width(), inner.height(), bitmap.width, bitmap.height)
+            fitContent(inner.width(), inner.height(), bitmap.width, bitmap.height, rotation)
         // A frame that is being dragged out of its cell is drawn where the finger put it; a settled
         // frame is kept covering the cell after any rotation or zoom.
         val applied = when {
@@ -128,7 +131,6 @@ object CollageRenderer {
         // The whole photo is drawn, never a crop: the space left over shows the cell's mat or the
         // page background, so nothing suggests an area was cut away.
         val zoom = applied?.zoom ?: 1f
-        val rotation = applied?.rotation ?: 0f
         val offsetX = applied?.offsetX ?: 0f
         val offsetY = applied?.offsetY ?: 0f
         val photo = canvas.save()

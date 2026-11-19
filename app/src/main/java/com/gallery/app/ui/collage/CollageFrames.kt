@@ -17,7 +17,7 @@ data class CollageFrame(
     val zoom: Float = 1f,
     val rotation: Float = 0f
 ) {
-    /** True when the photo still rests at its fitted base framing (a base frame can be dragged out). */
+    /** True when the photo still rests at its fitted base framing, where it always stays whole. */
     val atBase: Boolean get() = zoom <= 1.02f && abs(rotation) <= 0.5f
 
     /** Moves the photo, keeping a zoomed photo from leaving a gap inside the cell. */
@@ -75,18 +75,26 @@ data class CollageFrame(
 }
 
 /**
- * The size of the whole photo when fitted inside a cell: the largest copy that fits on both axes.
- * The renderer and the gesture code share it so their pan limits agree.
+ * The size of the whole photo when fitted inside a cell: the largest copy that fits on both axes
+ * once [rotation] is taken into account. A turned photo therefore shrinks instead of losing its
+ * edges, so nothing is ever cropped at the base framing. The renderer and the gesture code share
+ * it so their pan limits agree.
  */
 fun fitContent(
     cellWidth: Float,
     cellHeight: Float,
     sourceWidth: Int,
-    sourceHeight: Int
+    sourceHeight: Int,
+    rotation: Float = 0f
 ): Pair<Float, Float> {
     if (cellWidth <= 0f || cellHeight <= 0f || sourceWidth <= 0 || sourceHeight <= 0) {
         return cellWidth to cellHeight
     }
-    val scale = min(cellWidth / sourceWidth, cellHeight / sourceHeight)
+    val radians = Math.toRadians(rotation.toDouble())
+    val c = abs(cos(radians)).toFloat()
+    val s = abs(sin(radians)).toFloat()
+    val boxWidth = sourceWidth * c + sourceHeight * s
+    val boxHeight = sourceHeight * c + sourceWidth * s
+    val scale = min(cellWidth / boxWidth, cellHeight / boxHeight)
     return sourceWidth * scale to sourceHeight * scale
 }

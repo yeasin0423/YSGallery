@@ -49,6 +49,8 @@ interface AppStrings {
     val saving: String
     val reset: String
     val rotate: String
+    val zoomIn: String
+    val zoomOut: String
     val rotateLeft: String
     val rotateRight: String
     val straighten: String
@@ -428,7 +430,7 @@ object EnglishStrings : AppStrings {
     override val move = "Move"
     override val collage = "Collage"
     override val collageChooseTemplate = "Please select template"
-    override val collageGestures = "Tap to select or deselect. Drag to move, pinch to zoom and twist to rotate. Drop a photo on another one to swap."
+    override val collageGestures = "Tap to select. Long-press a photo and drop it on another to swap. Pinch to zoom and twist to rotate."
     override val collageSaved = "Collage saved"
     override val share = "Share"
     override val send = "Send"
@@ -437,6 +439,8 @@ object EnglishStrings : AppStrings {
     override val saving = "Saving …"
     override val reset = "Reset"
     override val rotate = "Rotate"
+    override val zoomIn = "Zoom in"
+    override val zoomOut = "Zoom out"
     override val rotateLeft = "Rotate left"
     override val rotateRight = "Rotate right"
     override val straighten = "Straighten"
