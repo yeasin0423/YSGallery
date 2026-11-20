@@ -41,9 +41,9 @@ jobs:
       - name: Show checksums
         run: sha256sum app/build/outputs/apk/release/*.apk
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v6
         with:
-          name: Gallery-unsigned-${{ github.ref_name }}
+          name: app-release-unsigned.apk
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
 
