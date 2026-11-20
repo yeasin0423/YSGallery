@@ -202,8 +202,22 @@ fun CollageEditorScreen(
         swapped[source] = swapped[target]
         swapped[target] = moved
         bitmaps = swapped
-        frames[source] = CollageFrame()
-        frames[target] = CollageFrame()
+        // The framing belongs to the photo, not to the cell: a turned or zoomed photo keeps its
+        // rotation and zoom when it moves. Cells can differ in size, so pull each one back in.
+        val movedFrame = frames[source]
+        frames[source] = frames[target]
+        frames[target] = movedFrame
+        listOf(source, target).forEach { index ->
+            val cell = cellRect(index) ?: return@forEach
+            val (contentWidth, contentHeight) =
+                fitFor(index, cell.width, cell.height, frames[index].rotation)
+            frames[index] = frames[index].clamped(
+                cell.width,
+                cell.height,
+                contentWidth,
+                contentHeight
+            )
+        }
         selectedIndex = target
         changed = true
     }
