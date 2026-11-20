@@ -110,6 +110,7 @@ import com.gallery.app.ui.design.ThemedDialog
 import com.gallery.app.ui.design.ThemedTextField
 import com.gallery.app.ui.design.pressScale
 import com.gallery.app.ui.theme.LocalAppTheme
+import com.gallery.app.ui.theme.frost
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -316,7 +317,7 @@ fun MediaDetailScreen(
     // the threshold it closes (zooming back into the grid), otherwise it springs back.
     val dismissShrink = 0.25f
     val favoriteBurst = remember { androidx.compose.animation.core.Animatable(1f) }
-    val backgroundColor = Color.Black
+    val backgroundColor = palette.background
 
     val actions = DetailActions(
         isFavorite = isFav,
@@ -764,6 +765,7 @@ private fun OneUiFilmstrip(mediaList: List<MediaItem>, pagerState: androidx.comp
     val context = LocalContext.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val palette = LocalAppTheme.current.palette
     val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = pagerState.currentPage)
     val dragged by listState.interactionSource.collectIsDraggedAsState()
     var userScrolling by remember { mutableStateOf(false) }
@@ -816,8 +818,8 @@ private fun OneUiFilmstrip(mediaList: List<MediaItem>, pagerState: androidx.comp
                         .height(if (current) 54.dp else 44.dp)
                         .graphicsLayer { scaleX = if (current) 1.2f else 1f }
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF2A2A2C))
-                        .then(if (current) Modifier.border(2.dp, Color.White, RoundedCornerShape(6.dp)) else Modifier)
+                        .background(palette.surfaceVariant)
+                        .then(if (current) Modifier.border(2.dp, palette.onBackground, RoundedCornerShape(6.dp)) else Modifier)
                         .clickable {
                             userScrolling = false
                             scope.launch {
@@ -973,6 +975,7 @@ private fun DetailBottomBar(
     /** Editing is for photos only; on videos the edit action is shown but disabled. */
     editEnabled: Boolean = true
 ) {
+    val palette = LocalAppTheme.current.palette
     val favoriteIcon = if (actions.isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder
     val favoriteModifier = Modifier
         .drawBehind {
@@ -991,7 +994,7 @@ private fun DetailBottomBar(
             scaleY = s
         }
 
-    // One UI 8 viewer: a floating dark capsule with favourite, edit, details, share and delete.
+    // One UI 8 viewer: a floating capsule with favourite, edit, details, share and delete.
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1003,16 +1006,16 @@ private fun DetailBottomBar(
             modifier = Modifier
                 .height(64.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF232325).copy(alpha = 0.94f))
+                .background(palette.surface.copy(alpha = 0.94f))
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ChromeIcon(favoriteIcon, strings.favorite, if (actions.isFavorite) Color(0xFFFF4D6D) else Color.White, actions.onToggleFavorite, favoriteModifier)
-            ChromeIcon(Icons.Outlined.Edit, strings.edit, Color.White, actions.onEdit, enabled = editEnabled)
-            ChromeIcon(Icons.Outlined.Info, strings.details, Color.White, actions.onInfo)
-            ChromeIcon(Icons.Outlined.Share, strings.share, Color.White, actions.onShare)
-            ChromeIcon(Icons.Outlined.Delete, strings.delete, Color.White, actions.onDelete)
+            ChromeIcon(favoriteIcon, strings.favorite, if (actions.isFavorite) Color(0xFFFF4D6D) else palette.onBackground, actions.onToggleFavorite, favoriteModifier)
+            ChromeIcon(Icons.Outlined.Edit, strings.edit, palette.onBackground, actions.onEdit, enabled = editEnabled)
+            ChromeIcon(Icons.Outlined.Info, strings.details, palette.onBackground, actions.onInfo)
+            ChromeIcon(Icons.Outlined.Share, strings.share, palette.onBackground, actions.onShare)
+            ChromeIcon(Icons.Outlined.Delete, strings.delete, palette.onBackground, actions.onDelete)
         }
     }
 }
@@ -1020,17 +1023,22 @@ private fun DetailBottomBar(
 /** Reduced action bar for an item in the trash: restore, details, delete permanently. */
 @Composable
 private fun DetailTrashBar(actions: DetailActions) {
+    val palette = LocalAppTheme.current.palette
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))))
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, palette.frost(Color.Black, 0.65f))
+                )
+            )
             .windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility)
             .height(72.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LabeledChromeAction(Icons.Outlined.Restore, strings.restore, Color.White, actions.onRestore)
-        LabeledChromeAction(Icons.Outlined.Info, strings.details, Color.White, actions.onInfo)
+        LabeledChromeAction(Icons.Outlined.Restore, strings.restore, palette.onBackground, actions.onRestore)
+        LabeledChromeAction(Icons.Outlined.Info, strings.details, palette.onBackground, actions.onInfo)
         LabeledChromeAction(Icons.Outlined.DeleteForever, strings.deletePermanently, Color(0xFFFF6961), actions.onDeletePermanently)
     }
 }
@@ -1038,6 +1046,7 @@ private fun DetailTrashBar(actions: DetailActions) {
 /** Action bar for a file another app opened with "Open with": share and details only. */
 @Composable
 private fun DetailViewOnlyBar(actions: DetailActions) {
+    val palette = LocalAppTheme.current.palette
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1049,13 +1058,13 @@ private fun DetailViewOnlyBar(actions: DetailActions) {
             modifier = Modifier
                 .height(64.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF232325).copy(alpha = 0.94f))
+                .background(palette.surface.copy(alpha = 0.94f))
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ChromeIcon(Icons.Outlined.Info, strings.details, Color.White, actions.onInfo)
-            ChromeIcon(Icons.Outlined.Share, strings.share, Color.White, actions.onShare)
+            ChromeIcon(Icons.Outlined.Info, strings.details, palette.onBackground, actions.onInfo)
+            ChromeIcon(Icons.Outlined.Share, strings.share, palette.onBackground, actions.onShare)
         }
     }
 }
@@ -1088,17 +1097,18 @@ private fun ChromeIcon(
 
 @Composable
 private fun OneUiChromeCircle(icon: ImageVector, description: String, modifier: Modifier, onClick: () -> Unit) {
+    val palette = LocalAppTheme.current.palette
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
             .pressScale(interaction, 0.9f)
             .size(56.dp)
             .clip(CircleShape)
-            .background(Color(0xFF232325).copy(alpha = 0.94f))
-            .clickable(interactionSource = interaction, indication = ripple(color = Color.White), onClick = onClick),
+            .background(palette.surface.copy(alpha = 0.94f))
+            .clickable(interactionSource = interaction, indication = ripple(color = palette.onBackground), onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, description, tint = Color.White, modifier = Modifier.size(25.dp))
+        Icon(icon, description, tint = palette.onBackground, modifier = Modifier.size(25.dp))
     }
 }
 
