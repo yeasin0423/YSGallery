@@ -256,7 +256,10 @@ private fun AppearanceContent() {
             )
         }
     }
-    Footer("${strings.paletteLabel(currentPalette)}. ${strings.accentFooterText}")
+    Footer(
+        "${strings.paletteLabel(currentPalette, pickedWallpaperAccent(context) != null)}. " +
+            strings.accentFooterText
+    )
 
     if (showCustomEditor) {
         CustomAccentDialog(
@@ -345,7 +348,8 @@ private fun InfoContent(appVersionName: String) {
         strings.appNameLabel to appName,
         strings.appVersion to appVersionName.ifBlank { strings.unknown },
         strings.design to ThemeState.designLanguage.displayName,
-        strings.colorPaletteLabel to strings.paletteLabel(ThemeState.palette),
+        strings.colorPaletteLabel to
+            strings.paletteLabel(ThemeState.palette, pickedWallpaperAccent(context) != null),
         strings.language to LanguageState.language.displayName
     )
     Card {

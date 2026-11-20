@@ -316,7 +316,7 @@ interface AppStrings {
     val customPalette: String
     val language: String
     fun qualityDescription(tier: PerformanceProfile): String
-    fun paletteLabel(palette: AppColorPalette): String
+    fun paletteLabel(palette: AppColorPalette, fromWallpaper: Boolean = false): String
 
     // Settings pages
     val legendPhotos: String
@@ -329,6 +329,7 @@ interface AppStrings {
     val appearanceModeHeader: String
     val accentColorHeader: String
     val fromWallpaper: String
+    val wallpaperAccent: String
     val accentFooterText: String
     val appNameLabel: String
     val colorPaletteLabel: String
@@ -696,6 +697,7 @@ object EnglishStrings : AppStrings {
     override val appearanceModeHeader = "Appearance"
     override val accentColorHeader = "Accent Color"
     override val fromWallpaper = "From wallpaper"
+    override val wallpaperAccent = "Wallpaper accent"
     override val accentFooterText = "The accent color is used for icons, selections and highlighted text."
     override val appNameLabel = "Name"
     override val colorPaletteLabel = "Color Palette"
@@ -743,15 +745,10 @@ object EnglishStrings : AppStrings {
         PerformanceProfile.HIGH -> "Real glass with background blur, smooth animations, high image quality."
         PerformanceProfile.ULTRA -> "The full effect palette: glass, moving waves, the longest animations, the highest image quality and the largest caches."
     }
-    override fun paletteLabel(palette: AppColorPalette) = when (palette.id) {
-        CUSTOM_PALETTE_ID -> customPalette
-        "oneui_blue" -> "OneUI Blue"
-        "oneui_lavender" -> "OneUI Lavender"
-        "oneui_green" -> "OneUI Green"
-        "oneui_light_blue" -> "OneUI Light Blue"
-        "oneui_light_lavender" -> "OneUI Light Lavender"
-        "oneui_light_green" -> "OneUI Light Green"
-        else -> palette.label
+    override fun paletteLabel(palette: AppColorPalette, fromWallpaper: Boolean) = when {
+        palette.id != CUSTOM_PALETTE_ID -> palette.label
+        fromWallpaper -> wallpaperAccent
+        else -> customPalette
     }
 
     override val permissions = "Permissions"
