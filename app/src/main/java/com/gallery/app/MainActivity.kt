@@ -75,6 +75,7 @@ import com.gallery.app.ui.screens.PermissionScreen
 import com.gallery.app.ui.screens.TrashScreen
 import com.gallery.app.ui.theme.GalleryTheme
 import com.gallery.app.ui.theme.LocalAppTheme
+import com.gallery.app.ui.theme.ThemeState
 import com.gallery.app.ui.viewmodel.DetailSource
 import com.gallery.app.ui.viewmodel.GalleryTab
 import com.gallery.app.ui.viewmodel.GalleryUiState
@@ -126,6 +127,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Automatic brightness: a recreated activity has a new uiMode, so settle the palette before
+        // the first frame instead of flashing the previous one.
+        ThemeState.syncWithSystem(this)
         handleViewIntent(intent)
 
         // Compose would otherwise scale every animation by the system "animator duration scale"

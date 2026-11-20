@@ -118,6 +118,10 @@ There is no local JDK/Android SDK guarantee in every environment. Prefer CI as t
   and shows only their middle 72dp, so 40% of the layer reads as roughly 60% of the icon on screen —
   the same flower-to-circle ratio as the legacy PNGs and the master artwork. Keep it near 40%; 60%
   looks zoomed in a launcher.
+- Appearance offers Automatic, Light and Dark. Automatic follows the phone's night mode; the palette
+  is swapped in place when the phone flips. A fresh install starts on one of the wallpaper's own
+  colours (`WallpaperAccents`, falling back to the One UI blue when the phone reports none), not on a
+  fixed blue.
 - The settings hub shows only section titles. Counts, storage summaries and version numbers belong on
   the pushed pages, not in the list rows.
 - Legacy `amoled_gallery_*` SharedPreferences names are kept intentionally so existing settings survive.

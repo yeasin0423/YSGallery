@@ -306,6 +306,7 @@ interface AppStrings {
     val general: String
     val light: String
     val dark: String
+    val automatic: String
     val appVersion: String
     val debugBuild: String
     val prereleaseBuild: String
@@ -726,6 +727,7 @@ object EnglishStrings : AppStrings {
     override val general = "General"
     override val light = "Light"
     override val dark = "Dark"
+    override val automatic = "Automatic"
     override val appVersion = "App version"
     override val debugBuild = "Debug"
     override val prereleaseBuild = "Pre-release"

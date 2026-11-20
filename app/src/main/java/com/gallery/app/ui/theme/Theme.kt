@@ -1,6 +1,7 @@
 package com.gallery.app.ui.theme
 
 import android.app.Activity
+import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.LocalIndication
@@ -10,6 +11,7 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -17,6 +19,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 
@@ -28,6 +31,12 @@ fun GalleryTheme(
 ) {
     val targetTheme = ThemeState.currentTheme()
     val target = targetTheme.palette
+
+    // Automatic brightness follows the phone. The activity is recreated when the system theme
+    // changes (uiMode is not in configChanges), so re-checking here is enough to keep up.
+    val context = LocalContext.current
+    val nightMode = LocalConfiguration.current.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    LaunchedEffect(nightMode) { ThemeState.syncWithSystem(context) }
 
     // Palette changes (accent, light/dark) cross-fade instead of cutting over.
     val colorSpec = tween<Color>(durationMillis = 450)

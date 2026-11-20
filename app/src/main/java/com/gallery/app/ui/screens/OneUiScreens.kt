@@ -59,6 +59,7 @@ import com.gallery.app.ui.i18n.LanguageState
 import com.gallery.app.ui.i18n.strings
 import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.theme.ThemeState
+import com.gallery.app.ui.theme.BrightnessMode
 import com.gallery.app.ui.theme.isLight
 import com.gallery.app.ui.theme.presetsFor
 
@@ -233,7 +234,17 @@ private fun AppearanceContent() {
     var showCustomEditor by remember { mutableStateOf(false) }
 
     Header(strings.appearanceModeHeader)
-    ChoiceCard(listOf(true, false), lightMode, { if (it) strings.light else strings.dark }) { switchPaletteBrightness(context, it) }
+    ChoiceCard(
+        options = BrightnessMode.entries,
+        selected = ThemeState.brightnessMode,
+        label = { mode ->
+            when (mode) {
+                BrightnessMode.SYSTEM -> strings.automatic
+                BrightnessMode.LIGHT -> strings.light
+                BrightnessMode.DARK -> strings.dark
+            }
+        }
+    ) { mode -> ThemeState.setBrightnessMode(context, mode) }
     Header(strings.accentColorHeader)
     Card {
         Box(modifier = Modifier.padding(20.dp)) {

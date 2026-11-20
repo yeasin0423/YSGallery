@@ -36,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.graphics.toArgb
 import com.gallery.app.util.WallpaperAccents
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +57,7 @@ import com.gallery.app.ui.theme.CUSTOM_PALETTE_ID
 import com.gallery.app.ui.theme.DesignLanguage
 import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.theme.ThemeState
+import com.gallery.app.ui.theme.WallpaperAccentMemory
 import com.gallery.app.ui.theme.isLight
 import com.gallery.app.ui.theme.presetsFor
 import dev.chrisbanes.haze.HazeState
@@ -292,43 +292,22 @@ internal fun CustomAccentDialog(
     }
 }
 
-/** Switches the active palette between light and dark, keeping the accent slot (blue stays blue) or custom accent. */
-internal fun switchPaletteBrightness(context: android.content.Context, light: Boolean) {
-    val currentLanguage = ThemeState.designLanguage
-    val currentPalette = ThemeState.palette
-    if (currentPalette.isLight == light) return
-    val target = presetsFor(currentLanguage, light)
-    val next = if (currentPalette.id == CUSTOM_PALETTE_ID) {
-        target.first().copy(id = CUSTOM_PALETTE_ID, label = "Custom palette", accent = currentPalette.accent)
-    } else {
-        val slot = presetsFor(currentLanguage, currentPalette.isLight).indexOfFirst { it.id == currentPalette.id }
-        target.getOrElse(slot) { target.first() }
-    }
-    ThemeState.apply(next, context = context)
-}
-
 /** Applies a custom accent on the active mode's base colors - light stays light. */
 internal fun applyCustomAccent(context: android.content.Context, lightMode: Boolean, accent: Color) {
     val base = presetsFor(DesignLanguage.SAMSUNG_ONEUI, lightMode).first()
     val custom = base.copy(id = CUSTOM_PALETTE_ID, label = "Custom palette", accent = accent)
     ThemeState.apply(custom, context = context)
-    wallpaperAccentPrefs(context).edit().remove(KEY_WALLPAPER_ACCENT).apply()
+    WallpaperAccentMemory.forget(context)
 }
-
-private const val KEY_WALLPAPER_ACCENT = "wallpaper_accent"
-
-private fun wallpaperAccentPrefs(context: android.content.Context) =
-    context.getSharedPreferences("prism_wallpaper_accent", android.content.Context.MODE_PRIVATE)
 
 /** The wallpaper colour the current custom accent was taken from, or null if it was picked by hand. */
 internal fun pickedWallpaperAccent(context: android.content.Context): Color? =
-    wallpaperAccentPrefs(context).takeIf { it.contains(KEY_WALLPAPER_ACCENT) }
-        ?.let { Color(it.getInt(KEY_WALLPAPER_ACCENT, 0)) }
+    WallpaperAccentMemory.read(context)
 
 /** Takes one of the wallpaper's colours as the accent (stored as a custom accent, remembered as from the wallpaper). */
 internal fun applyWallpaperAccent(context: android.content.Context, lightMode: Boolean, color: Color) {
     applyCustomAccent(context, lightMode, color)
-    wallpaperAccentPrefs(context).edit().putInt(KEY_WALLPAPER_ACCENT, color.toArgb()).apply()
+    WallpaperAccentMemory.remember(context, color)
 }
 
 /**
