@@ -285,6 +285,7 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
     val hiddenAlbums by viewModel.hiddenAlbums.collectAsStateWithLifecycle()
     val graphicsQuality by viewModel.graphicsQuality.collectAsStateWithLifecycle()
     val videoSeekSeconds by viewModel.videoSeekSeconds.collectAsStateWithLifecycle()
+    val deleteDirectly by viewModel.deleteDirectly.collectAsStateWithLifecycle()
     val moveProgress by viewModel.moveProgress.collectAsStateWithLifecycle()
 
     var isFavoritesOpen by remember { mutableStateOf(false) }
@@ -761,6 +762,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                             onSetGraphicsQuality = { viewModel.setGraphicsQuality(it) },
                             videoSeekSeconds = videoSeekSeconds,
                             onSetVideoSeekSeconds = { viewModel.setVideoSeekSeconds(it) },
+                            deleteDirectly = deleteDirectly,
+                            onSetDeleteDirectly = { viewModel.setDeleteDirectly(it) },
                             onOpenFavorites = { isFavoritesOpen = true },
                             onOpenTrash = { viewModel.openTrash() },
                             loadStorageStats = { viewModel.loadStorageStats() },

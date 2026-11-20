@@ -150,6 +150,8 @@ internal fun OneUiSettingsPage(
     onSetGraphicsQuality: (PerformanceProfile) -> Unit,
     videoSeekSeconds: Int,
     onSetVideoSeekSeconds: (Int) -> Unit,
+    deleteDirectly: Boolean,
+    onSetDeleteDirectly: (Boolean) -> Unit,
     loadStorageStats: suspend () -> MediaRepository.MediaStorageStats?,
     onEmptyTrash: () -> Unit,
     onOpenLibrary: () -> Unit,
@@ -197,6 +199,8 @@ internal fun OneUiSettingsPage(
                     onSetGraphicsQuality = onSetGraphicsQuality,
                     videoSeekSeconds = videoSeekSeconds,
                     onSetVideoSeekSeconds = onSetVideoSeekSeconds,
+                    deleteDirectly = deleteDirectly,
+                    onSetDeleteDirectly = onSetDeleteDirectly,
                     canManageAllFiles = canManageAllFiles,
                     hasAllFilesAccess = hasAllFilesAccess,
                     onRequestAllFilesAccess = onRequestAllFilesAccess
@@ -280,6 +284,8 @@ private fun GeneralContent(
     onSetGraphicsQuality: (PerformanceProfile) -> Unit,
     videoSeekSeconds: Int,
     onSetVideoSeekSeconds: (Int) -> Unit,
+    deleteDirectly: Boolean,
+    onSetDeleteDirectly: (Boolean) -> Unit,
     canManageAllFiles: Boolean,
     hasAllFilesAccess: Boolean,
     onRequestAllFilesAccess: () -> Unit
@@ -296,6 +302,15 @@ private fun GeneralContent(
     Header(strings.seekDuration)
     ChoiceCard(listOf(5, 10, 15, 30), videoSeekSeconds, { strings.secondsLabel(it) }) { onSetVideoSeekSeconds(it) }
     Footer(strings.seekDurationDescription)
+
+    // Deletion: the trash is the default, but the system dialog can be skipped by deleting at once.
+    Header(strings.deletingHeader)
+    ChoiceCard(
+        options = listOf(false, true),
+        selected = deleteDirectly,
+        label = { if (it) strings.deletePermanently else strings.moveToTrash }
+    ) { onSetDeleteDirectly(it) }
+    Footer(strings.deleteDirectlyDescription)
 
     // Gesture guidance lives here instead of taking space in the Text panel.
     Header(strings.textEditing)

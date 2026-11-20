@@ -332,6 +332,16 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         videoPrefs.edit().putInt("seek_seconds", clamped).apply()
     }
 
+    // Delete sends media to MediaStore Trash by default; this removes it right away instead.
+    private val deletePrefs = application.getSharedPreferences("amoled_gallery_delete_prefs", Context.MODE_PRIVATE)
+    private val _deleteDirectly = MutableStateFlow(deletePrefs.getBoolean("delete_directly", false))
+    val deleteDirectly: StateFlow<Boolean> = _deleteDirectly.asStateFlow()
+
+    fun setDeleteDirectly(enabled: Boolean) {
+        _deleteDirectly.value = enabled
+        deletePrefs.edit().putBoolean("delete_directly", enabled).apply()
+    }
+
     init {
         loadFavorites()
         ThumbnailManager.getInstance(application).quality = _graphicsQuality.value
@@ -499,6 +509,11 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
             val itemsToTrash = allItems.filter { it.id in selected }
             if (itemsToTrash.isEmpty()) return@launch
+
+            if (_deleteDirectly.value) {
+                deleteItemsPermanently(itemsToTrash)
+                return@launch
+            }
 
             val uris = itemsToTrash.map { it.uri }
             val pendingIntent = withContext(Dispatchers.IO) { repository.createTrashRequest(uris, trash = true) }
@@ -854,6 +869,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
      * Moves media to MediaStore Trash.
      */
     fun trashMedia(item: MediaItem) {
+        if (_deleteDirectly.value) {
+            deletePermanently(item)
+            return
+        }
         viewModelScope.launch {
             val pendingIntent = withContext(Dispatchers.IO) { repository.createTrashRequest(listOf(item.uri), trash = true) }
             if (pendingIntent != null) {

@@ -271,6 +271,9 @@ interface AppStrings {
     val trashEmptyMessage: String
     val trashInfo: String
     val deletePermanently: String
+    val deletingHeader: String
+    val moveToTrash: String
+    val deleteDirectlyDescription: String
     val emptyTrashTitle: String
     fun emptyTrashMessage(count: Int): String
     val deleteSelectedTitle: String
@@ -663,6 +666,11 @@ object EnglishStrings : AppStrings {
     override val trashEmptyMessage = "Deleted media is kept here for 30 days."
     override val trashInfo = "Items in the trash are deleted permanently after 30 days."
     override val deletePermanently = "Delete permanently"
+    override val deletingHeader = "Deleting"
+    override val moveToTrash = "Move to trash"
+    override val deleteDirectlyDescription =
+        "Deleted photos and videos go to the trash, where they stay until you empty it. Permanent " +
+            "deletion asks for confirmation once and then removes them for good."
     override val emptyTrashTitle = "Empty trash?"
     override fun emptyTrashMessage(count: Int) = "All $count items in the trash will be deleted permanently."
     override val deleteSelectedTitle = "Delete selected items?"
