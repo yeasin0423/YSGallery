@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -51,6 +52,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -66,6 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -431,15 +434,36 @@ fun CollageEditorScreen(
                         }
                     }
                 }
-                // Three direct controls for the selected photo: turn, zoom in and zoom out.
+                // Three direct controls for the selected photo: turn, zoom in and zoom out. The row
+                // floats right above the selected cell (below it when the cell touches the top), so
+                // it is always next to the photo it changes.
+                val selectedCell = selectedIndex?.let { cellRect(it) }
+                var controlsSize by remember { mutableStateOf(IntSize.Zero) }
+                val controlsGap = with(LocalDensity.current) { 10.dp.toPx() }
+                val controlsOffset = if (selectedCell == null || controlsSize.width == 0) {
+                    IntOffset.Zero
+                } else {
+                    val maxX = (previewSize.width - controlsSize.width).coerceAtLeast(0)
+                    val maxY = (previewSize.height - controlsSize.height).coerceAtLeast(0)
+                    val x = (selectedCell.center.x - controlsSize.width / 2f)
+                        .roundToInt()
+                        .coerceIn(0, maxX)
+                    val above = selectedCell.top - controlsSize.height - controlsGap
+                    val below = selectedCell.bottom + controlsGap
+                    val y = if (above >= 0f) above else below
+                    IntOffset(x, y.roundToInt().coerceIn(0, maxY))
+                }
                 if (selectedIndex != null && !saving) {
                     Row(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 10.dp)
+                            .align(Alignment.TopStart)
+                            .offset { controlsOffset }
+                            .alpha(if (controlsSize.width == 0) 0f else 1f)
+                            .onSizeChanged { controlsSize = it }
                             .clip(RoundedCornerShape(50))
-                            .background(palette.surface.copy(alpha = 0.94f))
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                            .background(palette.surface.copy(alpha = 0.96f))
+                            .border(1.dp, palette.cardBorder, RoundedCornerShape(50))
+                            .padding(horizontal = 5.dp, vertical = 3.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         CollageControl(Icons.Rounded.Rotate90DegreesCw, strings.rotate) {
@@ -724,12 +748,12 @@ private suspend fun PointerInputScope.collageGestures(
 @Composable
 private fun CollageControl(icon: ImageVector, label: String, onClick: () -> Unit) {
     val palette = LocalAppTheme.current.palette
-    IconButton(onClick = onClick, modifier = Modifier.size(44.dp)) {
+    IconButton(onClick = onClick, modifier = Modifier.size(50.dp)) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = palette.onBackground,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(26.dp)
         )
     }
 }
