@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="black">#000000</color>
+    <!-- Behind the window and the Android 12 splash: light in the day, black at night. -->
+    <color name="splash_background">#F6F6F6</color>
 </resources>
