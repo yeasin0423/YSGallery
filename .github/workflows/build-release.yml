@@ -37,7 +37,7 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: app-release-unsigned.apk
+          name: Gallery-unsigned-${{ github.ref_name }}
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
 
