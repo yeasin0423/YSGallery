@@ -214,9 +214,15 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
         media.filter { it.id in favIds }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // Grid column count: 2 to 5 (OneUI style pinch-to-zoom, fixed 5 columns as default)
+    // Grid preferences shared by the photo grid, the album list and this property's own state.
+    private val gridPrefs = application.getSharedPreferences("amoled_gallery_grid_prefs", Context.MODE_PRIVATE)
+
+    // Grid column count: 2 to 5 (OneUI style pinch-to-zoom). The user's pinch choice is kept across
+    // launches; the graphics quality only supplies the first-run default.
     private val _columnCount = MutableStateFlow(
-        when (com.gallery.app.GalleryApplication.performanceProfile) {
+        gridPrefs.getInt("photo_columns", 0).takeIf { it in 2..5 } ?: when (
+            com.gallery.app.GalleryApplication.performanceProfile
+        ) {
             com.gallery.app.PerformanceProfile.LOW,
             com.gallery.app.PerformanceProfile.MEDIUM -> 4
             com.gallery.app.PerformanceProfile.HIGH,
@@ -709,7 +715,6 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Tiles per row of the album list and of the sub-albums inside an album; null = the design's default.
-    private val gridPrefs = application.getSharedPreferences("amoled_gallery_grid_prefs", Context.MODE_PRIVATE)
     private val _albumColumns = MutableStateFlow(gridPrefs.getInt("album_columns", 0).takeIf { it > 0 })
     val albumColumns: StateFlow<Int?> = _albumColumns.asStateFlow()
     private val _subAlbumColumns = MutableStateFlow(gridPrefs.getInt("sub_album_columns", 0).takeIf { it > 0 })
@@ -748,16 +753,20 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     fun zoomIn() {
         // Pinching out -> fewer columns (larger tiles)
-        if (_columnCount.value > 2) {
-            _columnCount.value -= 1
-        }
+        setColumnCount(_columnCount.value - 1)
     }
 
     fun zoomOut() {
         // Pinching in -> more columns (smaller tiles)
-        if (_columnCount.value < 5) {
-            _columnCount.value += 1
-        }
+        setColumnCount(_columnCount.value + 1)
+    }
+
+    /** Changes the photo grid and remembers it, so the next launch opens with the same tiles. */
+    private fun setColumnCount(columns: Int) {
+        val clamped = columns.coerceIn(2, 5)
+        if (clamped == _columnCount.value) return
+        _columnCount.value = clamped
+        gridPrefs.edit().putInt("photo_columns", clamped).apply()
     }
 
     fun loadMedia() {
