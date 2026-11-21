@@ -2,6 +2,7 @@ package com.gallery.app.util
 
 import android.app.WallpaperManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -73,6 +74,32 @@ fun setWallpaper(context: Context, uri: Uri, target: WallpaperTarget): Boolean =
     manager.setBitmap(cropped, null, true, target.flags)
     true
 }.getOrDefault(false)
+
+/**
+ * Opens Android's own wallpaper editor for the image at [uri] instead of setting it silently: the
+ * system screen lets the user move and zoom the picture and choose the home screen, the lock screen
+ * or both. Returns false when no app on the phone offers that screen.
+ */
+fun openWallpaperEditor(context: Context, uri: Uri, mimeType: String): Boolean {
+    val type = mimeType.takeIf { it.startsWith("image/") } ?: "image/*"
+    val crop = Intent(WallpaperManager.ACTION_CROP_AND_SET_WALLPAPER).apply {
+        setDataAndType(uri, type)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    if (runCatching { context.startActivity(crop); true }.getOrDefault(false)) return true
+
+    // Some ROMs leave out ACTION_CROP_AND_SET_WALLPAPER but still answer the share-style "Set as"
+    // chooser, which opens the same crop editor.
+    val attach = Intent(Intent.ACTION_ATTACH_DATA).apply {
+        setDataAndType(uri, type)
+        putExtra("mimeType", type)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    return runCatching {
+        context.startActivity(Intent.createChooser(attach, null))
+        true
+    }.getOrDefault(false)
+}
 
 /**
  * Makes the video or GIF at [uri] the live wallpaper: the choice is stored for

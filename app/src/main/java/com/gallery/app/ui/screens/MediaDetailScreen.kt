@@ -52,8 +52,6 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Movie
-import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Share
@@ -117,8 +115,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import dev.chrisbanes.haze.HazeState
 import com.gallery.app.ui.design.HazeSource
 import com.gallery.app.ui.design.OverlayWindow
@@ -213,8 +209,6 @@ fun MediaDetailScreen(
         }
     }
     var showRenameDialog by remember { mutableStateOf(false) }
-    /** The photo whose "set as wallpaper" sheet is open. */
-    var wallpaperItem by remember { mutableStateOf<MediaItem?>(null) }
     /** The item a delete button asked about, and whether that delete is permanent. */
     var pendingDelete by remember { mutableStateOf<Pair<MediaItem, Boolean>?>(null) }
     // The ⋯ menu in the top bar.
@@ -621,81 +615,29 @@ fun MediaDetailScreen(
                     android.content.ClipData.newUri(context.contentResolver, currentItem.displayName, currentItem.uri)
                 )
             })
-            // Photos become the wallpaper; videos and GIFs become a live wallpaper (see the sheet).
-            add(com.gallery.app.ui.design.MenuEntry(strings.setAsWallpaper) { wallpaperItem = currentItem })
+            // Only a still photo can become the wallpaper. Android's own crop/preview screen opens so
+            // the picture can be moved and zoomed and the home screen, lock screen or both chosen;
+            // videos and GIFs grey the entry out.
+            add(
+                com.gallery.app.ui.design.MenuEntry(
+                    strings.setAsWallpaper,
+                    enabled = currentItem.isImage
+                ) {
+                    val opened = com.gallery.app.util.openWallpaperEditor(
+                        context, currentItem.uri, currentItem.mimeType
+                    )
+                    if (!opened) {
+                        android.widget.Toast.makeText(
+                            context, strings.wallpaperFailed, android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            )
             if (actions.showRename) {
                 add(com.gallery.app.ui.design.MenuEntry(strings.rename) { showRenameDialog = true })
             }
         }
     )
-
-    // Set as wallpaper: which screen, in the current design's sheet; set in-app (see setWallpaper).
-    wallpaperItem?.let { item ->
-        com.gallery.app.ui.design.ThemedSheet(
-            onDismissRequest = { wallpaperItem = null },
-            title = strings.setAsWallpaper
-        ) {
-            val palette = LocalAppTheme.current.palette
-            // A GIF can be either: a still wallpaper of its first frame, or a moving one. A video can
-            // only be the moving one.
-            val movable = item.isVideo || item.mimeType.equals("image/gif", ignoreCase = true)
-            com.gallery.app.ui.design.ThemedListSection(
-                inSheet = true,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 20.dp),
-                rows = buildList {
-                    if (movable) {
-                        add(
-                            com.gallery.app.ui.design.ListRow(
-                                strings.liveWallpaper,
-                                icon = Icons.Outlined.Movie,
-                                iconColor = palette.accent,
-                                showChevron = false,
-                                onClick = {
-                                    val tooLong = item.isVideo &&
-                                        item.durationMs > com.gallery.app.service.LiveWallpaperChoice.MAX_VIDEO_MS
-                                    if (tooLong) {
-                                        android.widget.Toast.makeText(context, strings.liveWallpaperTooLong, android.widget.Toast.LENGTH_LONG).show()
-                                    } else {
-                                        wallpaperItem = null
-                                        com.gallery.app.util.setLiveWallpaper(context, item.uri, item.isVideo)
-                                    }
-                                }
-                            )
-                        )
-                    }
-                    if (!item.isVideo) {
-                        listOf(
-                            com.gallery.app.util.WallpaperTarget.HOME to strings.wallpaperHome,
-                            com.gallery.app.util.WallpaperTarget.LOCK to strings.wallpaperLock,
-                            com.gallery.app.util.WallpaperTarget.BOTH to strings.wallpaperBoth
-                        ).forEach { (target, label) ->
-                            add(
-                                com.gallery.app.ui.design.ListRow(
-                                    label,
-                                    icon = Icons.Outlined.Wallpaper,
-                                    iconColor = palette.accent,
-                                    showChevron = false,
-                                    onClick = {
-                                        wallpaperItem = null
-                                        scope.launch {
-                                            val ok = withContext(Dispatchers.IO) {
-                                                com.gallery.app.util.setWallpaper(context, item.uri, target)
-                                            }
-                                            android.widget.Toast.makeText(
-                                                context,
-                                                if (ok) strings.wallpaperSet else strings.wallpaperFailed,
-                                                android.widget.Toast.LENGTH_SHORT
-                                            ).show()
-                                        }
-                                    }
-                                )
-                            )
-                        }
-                    }
-                }
-            )
-        }
-    }
 
     if (showRenameDialog) {
         RenameDialog(

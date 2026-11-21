@@ -541,6 +541,8 @@ data class MenuEntry(
     val icon: ImageVector? = null,
     val checked: Boolean = false,
     val destructive: Boolean = false,
+    /** A greyed-out entry still shows why the action is unavailable, but cannot be tapped. */
+    val enabled: Boolean = true,
     val onClick: () -> Unit
 )
 
@@ -648,6 +650,7 @@ private fun Modifier.menuSurface(shape: Shape): Modifier {
 private fun MenuRow(entry: MenuEntry, anyChecked: Boolean, onClick: () -> Unit) {
     val palette = LocalAppTheme.current.palette
     val textColor = when {
+        !entry.enabled -> palette.onBackground.copy(alpha = 0.38f)
         entry.destructive -> palette.destructive
         entry.checked -> palette.accent
         else -> palette.onBackground
@@ -655,7 +658,7 @@ private fun MenuRow(entry: MenuEntry, anyChecked: Boolean, onClick: () -> Unit) 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = entry.enabled, onClick = onClick)
             .padding(horizontal = 30.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
