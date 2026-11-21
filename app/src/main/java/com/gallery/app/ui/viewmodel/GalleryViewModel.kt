@@ -218,16 +218,10 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     private val gridPrefs = application.getSharedPreferences("amoled_gallery_grid_prefs", Context.MODE_PRIVATE)
 
     // Grid column count: 2 to 5 (OneUI style pinch-to-zoom). The user's pinch choice is kept across
-    // launches; the graphics quality only supplies the first-run default.
+    // launches. The default is fixed and deliberately independent of the graphics quality: changing
+    // that setting changes how images are decoded, never how many tiles fit on a row.
     private val _columnCount = MutableStateFlow(
-        gridPrefs.getInt("photo_columns", 0).takeIf { it in 2..5 } ?: when (
-            com.gallery.app.GalleryApplication.performanceProfile
-        ) {
-            com.gallery.app.PerformanceProfile.LOW,
-            com.gallery.app.PerformanceProfile.MEDIUM -> 4
-            com.gallery.app.PerformanceProfile.HIGH,
-            com.gallery.app.PerformanceProfile.ULTRA -> 5
-        }
+        gridPrefs.getInt("photo_columns", 0).takeIf { it in 2..5 } ?: 4
     )
     val columnCount: StateFlow<Int> = _columnCount.asStateFlow()
 
