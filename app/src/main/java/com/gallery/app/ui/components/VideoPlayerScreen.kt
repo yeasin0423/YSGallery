@@ -92,8 +92,6 @@ import com.gallery.app.model.MediaItem
 import com.gallery.app.ui.design.MenuEntry
 import com.gallery.app.ui.design.ThemedButton
 import com.gallery.app.ui.design.ThemedPopupMenu
-import com.gallery.app.ui.theme.PureWhite
-import com.gallery.app.ui.theme.TextMuted
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -104,6 +102,11 @@ val LocalVideoSeekSeconds = compositionLocalOf { 10 }
 
 /** The speed menu, from slow motion to double speed. */
 private val playbackSpeeds = listOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
+// The player's canvas is always black (even in the light theme), so its chrome is always white:
+// palette.onBackground would turn the icons black on black in light mode.
+private val PlayerChrome = Color.White
+private val PlayerChromeMuted = Color.White.copy(alpha = 0.72f)
 
 /** Auto follows the phone; the other two lock playback to one orientation until the player closes. */
 private enum class PlayerOrientation { AUTO, LANDSCAPE, PORTRAIT }
@@ -373,14 +376,14 @@ fun VideoPlayerScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBackIos,
                             contentDescription = strings.back,
-                            tint = PureWhite,
+                            tint = PlayerChrome,
                             modifier = Modifier.size(22.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = item.displayName,
-                        color = PureWhite,
+                        color = PlayerChrome,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -427,7 +430,7 @@ fun VideoPlayerScreen(
                                 PlayerOrientation.LANDSCAPE -> strings.rotateLandscape
                                 PlayerOrientation.PORTRAIT -> strings.rotatePortrait
                             },
-                            tint = PureWhite,
+                            tint = PlayerChrome,
                             modifier = Modifier.size(22.dp)
                         )
                     }
@@ -462,7 +465,7 @@ fun VideoPlayerScreen(
                     Icon(
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = if (isPlaying) strings.pause else strings.play,
-                        tint = PureWhite,
+                        tint = PlayerChrome,
                         modifier = Modifier.size(40.dp)
                     )
                 }
@@ -485,13 +488,13 @@ fun VideoPlayerScreen(
                     ) {
                         Text(
                             text = formatTimestamp(currentPositionMs),
-                            color = PureWhite,
+                            color = PlayerChrome,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = formatTimestamp(durationMs),
-                            color = TextMuted,
+                            color = PlayerChromeMuted,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
@@ -512,8 +515,8 @@ fun VideoPlayerScreen(
                         },
                         valueRange = 0f..maxVal,
                         colors = SliderDefaults.colors(
-                            thumbColor = PureWhite,
-                            activeTrackColor = PureWhite,
+                            thumbColor = PlayerChrome,
+                            activeTrackColor = PlayerChrome,
                             inactiveTrackColor = Color.White.copy(alpha = 0.25f)
                         ),
                         modifier = Modifier.fillMaxWidth()
@@ -548,13 +551,13 @@ fun VideoPlayerScreen(
                     Icon(
                         imageVector = if (flash.forward) Icons.Rounded.FastForward else Icons.Rounded.FastRewind,
                         contentDescription = null,
-                        tint = PureWhite,
+                        tint = PlayerChrome,
                         modifier = Modifier.size(30.dp)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = if (flash.forward) strings.seekForward(flash.seconds) else strings.seekBackward(flash.seconds),
-                        color = PureWhite,
+                        color = PlayerChrome,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -573,7 +576,7 @@ fun VideoPlayerScreen(
             ) {
                 Text(
                     text = strings.videoPlaybackFailed,
-                    color = PureWhite,
+                    color = PlayerChrome,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -643,7 +646,7 @@ private fun PlayerPill(
     ) {
         Text(
             text = text,
-            color = PureWhite,
+            color = PlayerChrome,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
