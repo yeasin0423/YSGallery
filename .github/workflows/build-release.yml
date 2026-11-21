@@ -35,7 +35,7 @@ jobs:
       - name: Show checksums
         run: sha256sum app/build/outputs/apk/release/*.apk
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: Gallery-unsigned-${{ github.ref_name }}
           path: app/build/outputs/apk/release/app-release-unsigned.apk
