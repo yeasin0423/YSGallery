@@ -154,6 +154,8 @@ fun MediaDetailScreen(
     viewOnly: Boolean = false,
     /** Off for files opened from another app: renaming them needs the gallery's write-access flow. */
     allowRename: Boolean = true,
+    /** Whether deleting goes straight past the trash; only changes the confirmation's wording. */
+    deleteDirectly: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (mediaList.isEmpty()) {
@@ -213,6 +215,8 @@ fun MediaDetailScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     /** The photo whose "set as wallpaper" sheet is open. */
     var wallpaperItem by remember { mutableStateOf<MediaItem?>(null) }
+    /** The item a delete button asked about, and whether that delete is permanent. */
+    var pendingDelete by remember { mutableStateOf<Pair<MediaItem, Boolean>?>(null) }
     // The ⋯ menu in the top bar.
     var showMoreMenu by remember { mutableStateOf(false) }
     var moreMenuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -345,9 +349,9 @@ fun MediaDetailScreen(
         onRename = { showRenameDialog = true },
         onEdit = { editingItem = currentItem },
         onInfo = { settleInfo(if (infoMostlyOpen) 0f else 1f) },
-        onDelete = { onTrashItem(currentItem) },
+        onDelete = { pendingDelete = currentItem to deleteDirectly },
         onRestore = { onRestoreItem(currentItem) },
-        onDeletePermanently = { onDeletePermanently(currentItem) },
+        onDeletePermanently = { pendingDelete = currentItem to true },
         showRename = !trashMode && !viewOnly && allowRename,
         onMore = { anchor ->
             moreMenuAnchor = anchor
@@ -701,6 +705,23 @@ fun MediaDetailScreen(
                 showRenameDialog = false
                 onRenameItem(currentItem, newName)
             }
+        )
+    }
+
+    // Deleting always asks first, whether the item goes to the trash or away for good. Android's own
+    // MediaStore dialog does not appear when the app already holds all-files access.
+    pendingDelete?.let { (item, permanent) ->
+        ThemedDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = strings.deleteItemTitle,
+            message = strings.deleteItemMessage(permanent),
+            buttons = listOf(
+                DialogButton(strings.cancel, DialogButtonStyle.Cancel) { pendingDelete = null },
+                DialogButton(strings.delete, DialogButtonStyle.Destructive) {
+                    pendingDelete = null
+                    if (permanent) onDeletePermanently(item) else onTrashItem(item)
+                }
+            )
         )
     }
 

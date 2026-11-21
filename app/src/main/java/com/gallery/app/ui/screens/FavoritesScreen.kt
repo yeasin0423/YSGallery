@@ -49,7 +49,9 @@ fun FavoritesScreen(
     isFavorite: (Long) -> Boolean,
     onToggleFavorite: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    columnCount: Int = 4
+    columnCount: Int = 4,
+    /** Whether deleting skips the trash; only the viewer's confirmation wording needs it. */
+    deleteDirectly: Boolean = false
 ) {
     var selectedDetailIndex by remember { mutableStateOf<Int?>(null) }
     val gridState = rememberLazyGridState()
@@ -139,7 +141,8 @@ fun FavoritesScreen(
                     onTrashItem = onTrashItem,
                     onRenameItem = onRenameItem,
                     isFavorite = isFavorite,
-                    onToggleFavorite = onToggleFavorite
+                    onToggleFavorite = onToggleFavorite,
+                    deleteDirectly = deleteDirectly
                 )
         }
     }

@@ -276,8 +276,10 @@ interface AppStrings {
     val deleteDirectlyDescription: String
     val emptyTrashTitle: String
     fun emptyTrashMessage(count: Int): String
+    val deleteItemTitle: String
+    fun deleteItemMessage(permanent: Boolean): String
     val deleteSelectedTitle: String
-    fun deleteSelectedMessage(count: Int): String
+    fun deleteSelectedMessage(count: Int, permanent: Boolean = true): String
 
     // Viewer & details
     val shareItem: String
@@ -673,9 +675,20 @@ object EnglishStrings : AppStrings {
             "deletion asks for confirmation once and then removes them for good."
     override val emptyTrashTitle = "Empty trash?"
     override fun emptyTrashMessage(count: Int) = "All $count items in the trash will be deleted permanently."
+    override val deleteItemTitle = "Delete this item?"
+    override fun deleteItemMessage(permanent: Boolean) =
+        if (permanent) {
+            "This item will be deleted permanently."
+        } else {
+            "This item will be moved to the trash, where it stays for 30 days."
+        }
     override val deleteSelectedTitle = "Delete selected items?"
-    override fun deleteSelectedMessage(count: Int) =
-        "The $count selected item${if (count == 1) "" else "s"} will be deleted permanently."
+    override fun deleteSelectedMessage(count: Int, permanent: Boolean) =
+        if (permanent) {
+            "The $count selected item${if (count == 1) "" else "s"} will be deleted permanently."
+        } else {
+            "The $count selected item${if (count == 1) "" else "s"} will be moved to the trash for 30 days."
+        }
 
     override val shareItem = "Share item"
     override val shareMedia = "Share media"

@@ -128,7 +128,9 @@ fun GalleryScreen(
     onMoveClick: () -> Unit = {},
     onDeleteSelected: () -> Unit = {},
     graphicsQuality: com.gallery.app.PerformanceProfile = com.gallery.app.PerformanceProfile.MEDIUM,
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    /** Whether deleting skips the trash; only the viewer's confirmation wording needs it. */
+    deleteDirectly: Boolean = false
 ) {
     // Intercept back button if in selection mode and detail overlay is not open
     if (isSelectionMode && selectedDetailIndex == null) {
@@ -500,7 +502,8 @@ fun GalleryScreen(
                     onRenameItem = onRenameItem,
                     isFavorite = isFavorite,
                     onToggleFavorite = onToggleFavorite,
-                    onPageChanged = onDetailIndexChanged
+                    onPageChanged = onDetailIndexChanged,
+                    deleteDirectly = deleteDirectly
                 )
         }
     }

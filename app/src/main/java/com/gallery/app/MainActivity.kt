@@ -62,6 +62,8 @@ import com.gallery.app.ui.design.LocalRootHaze
 import com.gallery.app.ui.design.OverlayHost
 import com.gallery.app.ui.design.OverlayHostState
 import com.gallery.app.ui.design.ThemedDialog
+import com.gallery.app.ui.design.DialogButton
+import com.gallery.app.ui.design.DialogButtonStyle
 import com.gallery.app.ui.design.ThemedProgressBar
 import com.gallery.app.ui.design.screenBackground
 import com.gallery.app.ui.qualityTween
@@ -292,6 +294,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
     // The settings hub, pushed from the ⋮ menu over the tabs.
     var isSettingsOpen by remember { mutableStateOf(false) }
     var showCreateAlbumFromMove by remember { mutableStateOf(false) }
+    // The multi-selection delete waits in this dialog until the user confirms it.
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     // Android 11+ all-files access: optional, only requested from the explicit buttons.
     var allFilesAccess by remember { mutableStateOf(hasAllFilesAccess()) }
     // Mirrors the media permission so the prompt can enable Close even before the UI state updates.
@@ -494,7 +498,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                         onMoveClick = { viewModel.openMoveSheet() },
                                         onDeleteSelected = { viewModel.trashSelectedMedia() },
                                         graphicsQuality = graphicsQuality,
-                                        onOpenSettings = { isSettingsOpen = true }
+                                        onOpenSettings = { isSettingsOpen = true },
+                                        deleteDirectly = deleteDirectly
                                     )
                                 }
 
@@ -564,7 +569,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                         onSetStorageFilter = { viewModel.setAlbumStorageFilter(it) },
                                         albumBytes = { viewModel.albumBytes(it) },
                                         freeByStorage = freeByStorage,
-                                        onOpenSettings = { isSettingsOpen = true }
+                                        onOpenSettings = { isSettingsOpen = true },
+                                        deleteDirectly = deleteDirectly
                                     )
                                 }
                             }
@@ -639,7 +645,7 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                             if (collageEnabled) collageItems = selectedMedia
                         },
                         onMove = { viewModel.openMoveSheet() },
-                        onDelete = { viewModel.trashSelectedMedia() }
+                        onDelete = { showDeleteConfirm = true }
                     )
                 }
             }
@@ -700,7 +706,8 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                         onRenameItem = { item, newName -> viewModel.renameMedia(item, newName) },
                         isFavorite = { id -> favoriteIds.contains(id) },
                         onToggleFavorite = { id -> viewModel.toggleFavorite(id) },
-                        columnCount = 4
+                        columnCount = 4,
+                        deleteDirectly = deleteDirectly
                     )
 
                     PushedScreen.TRASH -> {
@@ -782,6 +789,23 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
             }
         }
         }
+    }
+
+    // Deleting a selection asks first. Android's own MediaStore prompt is skipped when the app
+    // already has all-files access, so the gallery needs its own confirmation either way.
+    if (showDeleteConfirm) {
+        ThemedDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = strings.deleteSelectedTitle,
+            message = strings.deleteSelectedMessage(selectedIds.size, permanent = deleteDirectly),
+            buttons = listOf(
+                DialogButton(strings.cancel, DialogButtonStyle.Cancel) { showDeleteConfirm = false },
+                DialogButton(strings.delete, DialogButtonStyle.Destructive) {
+                    showDeleteConfirm = false
+                    viewModel.trashSelectedMedia()
+                }
+            )
+        )
     }
 
     // In-app progress dialog for media move / album migration, in One UI style.

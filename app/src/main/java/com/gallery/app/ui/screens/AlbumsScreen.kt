@@ -236,7 +236,9 @@ fun AlbumsScreen(
     /** Moves every ticked album to the other storage at once. */
     onMigrateAlbums: (List<AlbumItem>, Boolean) -> Unit = { _, _ -> },
     /** Opens the settings hub from the ⋮ menu. */
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    /** Whether deleting skips the trash; only the viewer's confirmation wording needs it. */
+    deleteDirectly: Boolean = false
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var showCreateSubDialog by remember { mutableStateOf(false) }
@@ -1002,7 +1004,8 @@ fun AlbumsScreen(
                     onRenameItem = onRenameItem,
                     isFavorite = isFavorite,
                     onToggleFavorite = onToggleFavorite,
-                    onPageChanged = onDetailIndexChanged
+                    onPageChanged = onDetailIndexChanged,
+                    deleteDirectly = deleteDirectly
                 )
         }
     }
