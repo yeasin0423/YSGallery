@@ -152,6 +152,8 @@ fun MediaDetailScreen(
     allowRename: Boolean = true,
     /** Whether deleting goes straight past the trash; only changes the confirmation's wording. */
     deleteDirectly: Boolean = false,
+    /** Another app opened this file: a video starts playing immediately instead of waiting for Play. */
+    autoPlayVideo: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (mediaList.isEmpty()) {
@@ -218,6 +220,11 @@ fun MediaDetailScreen(
     var viewerSize by remember { mutableStateOf(IntSize.Zero) }
 
     val currentItem = mediaList.getOrNull(pagerState.currentPage) ?: mediaList[0]
+    // A video another app opened with the gallery starts playing right away. Inside the gallery the
+    // viewer keeps its Play button, so swiping through a mixed album never starts a decoder by itself.
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        if (autoPlayVideo && currentItem.isVideo) playingVideo = currentItem
+    }
     val isFav = isFavorite(currentItem.id)
     var bounceTrigger by remember { mutableStateOf(false) }
     val favScale by animateFloatAsState(

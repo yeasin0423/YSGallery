@@ -99,7 +99,8 @@ fun ExternalMediaViewer(
                 isFavorite = { it in favoriteIds },
                 onToggleFavorite = onToggleFavorite,
                 viewOnly = !inLibrary,
-                allowRename = false
+                allowRename = false,
+                autoPlayVideo = true
             )
         }
     }
