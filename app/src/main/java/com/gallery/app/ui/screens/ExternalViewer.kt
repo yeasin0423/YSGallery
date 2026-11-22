@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.exifinterface.media.ExifInterface
 import com.gallery.app.model.MediaItem
+import com.gallery.app.ui.components.VideoPlayerScreen
 
 /**
  * Photos or videos another app asked to show ("Open with"). Usually one file; a camera app can hand
@@ -77,7 +78,17 @@ fun ExternalMediaViewer(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        if (items.isNotEmpty()) {
+        val singleVideo = items.singleOrNull()?.takeIf { it.isVideo }
+        if (singleVideo != null) {
+            // A video handed over by another app opens as the player itself, not as the gallery's pager
+            // with a play button. Back then closes the player (and the gallery) instead of revealing a
+            // regular media page underneath.
+            VideoPlayerScreen(
+                item = singleVideo,
+                onClose = onClose,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (items.isNotEmpty()) {
             MediaDetailScreen(
                 mediaList = items,
                 initialIndex = request.initialIndex.value.coerceIn(0, items.lastIndex),
@@ -99,8 +110,7 @@ fun ExternalMediaViewer(
                 isFavorite = { it in favoriteIds },
                 onToggleFavorite = onToggleFavorite,
                 viewOnly = !inLibrary,
-                allowRename = false,
-                autoPlayVideo = true
+                allowRename = false
             )
         }
     }
