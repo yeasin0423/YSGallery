@@ -13,8 +13,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,7 +36,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
@@ -45,8 +47,6 @@ import androidx.compose.material.icons.rounded.ScreenLockPortrait
 import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -62,9 +62,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -368,16 +370,13 @@ fun VideoPlayerScreen(
                 ) {
                     IconButton(
                         onClick = requestClose,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.55f))
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBackIos,
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = strings.back,
                             tint = PlayerChrome,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(12.dp))
@@ -477,8 +476,13 @@ fun VideoPlayerScreen(
                         .align(Alignment.BottomCenter)
                         .widthIn(max = 560.dp)
                         .fillMaxWidth()
-                        .padding(bottom = 24.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                            )
+                        )
                         .navigationBarsPadding()
+                        .padding(top = 18.dp, bottom = 18.dp)
                         .padding(horizontal = 20.dp)
                 ) {
                     Row(
@@ -489,36 +493,29 @@ fun VideoPlayerScreen(
                         Text(
                             text = formatTimestamp(currentPositionMs),
                             color = PlayerChrome,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = formatTimestamp(durationMs),
                             color = PlayerChromeMuted,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
 
-                    val maxVal = durationMs.toFloat().coerceAtLeast(1f)
-                    val sliderVal = currentPositionMs.toFloat().coerceIn(0f, maxVal)
-
-                    Slider(
-                        value = sliderVal,
-                        onValueChange = { newPos ->
+                    PlayerSeekBar(
+                        positionMs = currentPositionMs,
+                        durationMs = durationMs,
+                        onSeek = { position ->
                             isScrubbing = true
-                            currentPositionMs = newPos.toLong()
+                            currentPositionMs = position
                         },
-                        onValueChangeFinished = {
-                            exoPlayer.seekTo(currentPositionMs)
+                        onSeekFinished = { position ->
+                            exoPlayer.seekTo(position)
+                            currentPositionMs = position
                             isScrubbing = false
                         },
-                        valueRange = 0f..maxVal,
-                        colors = SliderDefaults.colors(
-                            thumbColor = PlayerChrome,
-                            activeTrackColor = PlayerChrome,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.25f)
-                        ),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -654,6 +651,101 @@ private fun PlayerPill(
 }
 
 private data class SeekFlash(val forward: Boolean, val seconds: Int, val token: Int)
+
+/**
+ * One UI's scrubber: a hairline track with a small round thumb instead of Material's thick
+ * expressive track. The dot and time follow the finger; the player seeks when it is released.
+ */
+@Composable
+private fun PlayerSeekBar(
+    positionMs: Long,
+    durationMs: Long,
+    onSeek: (Long) -> Unit,
+    onSeekFinished: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var dragPosition by remember { mutableStateOf<Long?>(null) }
+    val shownPosition = dragPosition ?: positionMs
+    val fraction = if (durationMs > 0L) {
+        (shownPosition.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .pointerInput(durationMs) {
+                detectTapGestures { offset ->
+                    val target = seekPosition(offset.x, size.width, 6.dp.toPx(), durationMs)
+                    onSeek(target)
+                    onSeekFinished(target)
+                }
+            }
+            .pointerInput(durationMs) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset ->
+                        val target = seekPosition(offset.x, size.width, 6.dp.toPx(), durationMs)
+                        dragPosition = target
+                        onSeek(target)
+                    },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        val target = seekPosition(change.position.x, size.width, 6.dp.toPx(), durationMs)
+                        dragPosition = target
+                        onSeek(target)
+                    },
+                    onDragEnd = {
+                        val target = dragPosition
+                        dragPosition = null
+                        if (target != null) onSeekFinished(target)
+                    },
+                    onDragCancel = {
+                        // A canceled drag must still release the scrub lock, or the position label
+                        // would stop following the player.
+                        val target = dragPosition
+                        dragPosition = null
+                        if (target != null) onSeekFinished(target)
+                    }
+                )
+            }
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val centerY = size.height / 2f
+            val inset = 6.dp.toPx()
+            val startX = inset
+            val endX = size.width - inset
+            val thumbX = startX + (endX - startX) * fraction
+            drawLine(
+                color = Color.White.copy(alpha = 0.28f),
+                start = Offset(startX, centerY),
+                end = Offset(endX, centerY),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawLine(
+                color = PlayerChrome,
+                start = Offset(startX, centerY),
+                end = Offset(thumbX, centerY),
+                strokeWidth = 2.dp.toPx(),
+                cap = StrokeCap.Round
+            )
+            drawCircle(
+                color = PlayerChrome,
+                radius = 5.dp.toPx(),
+                center = Offset(thumbX, centerY)
+            )
+        }
+    }
+}
+
+private fun seekPosition(x: Float, width: Int, inset: Float, durationMs: Long): Long {
+    if (durationMs <= 0L) return 0L
+    val usable = (width - inset * 2f).coerceAtLeast(1f)
+    val fraction = ((x - inset) / usable).coerceIn(0f, 1f)
+    return (durationMs * fraction).toLong()
+}
 
 private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
