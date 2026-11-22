@@ -25,7 +25,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.gallery.app.model.MediaItem
-import com.gallery.app.ui.theme.PureWhite
 
 /**
  * The still a video shows inside the viewer's pager: the cached thumbnail, with the sharp first
@@ -93,7 +92,7 @@ fun AmoledVideoPlayer(
                     Icon(
                         imageVector = Icons.Rounded.PlayArrow,
                         contentDescription = strings.play,
-                        tint = PureWhite,
+                        tint = Color.White,
                         modifier = Modifier.size(40.dp)
                     )
                 }
