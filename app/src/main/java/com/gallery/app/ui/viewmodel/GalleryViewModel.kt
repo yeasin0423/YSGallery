@@ -4,6 +4,8 @@ import com.gallery.app.ui.i18n.strings
 import android.app.Application
 import android.app.PendingIntent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.gallery.app.data.AlbumRenameOutcome
@@ -929,25 +931,54 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     fun deleteItemsPermanently(items: List<MediaItem>) {
         if (items.isEmpty()) return
         viewModelScope.launch {
+            // MediaStore's delete request is really a permission prompt. Once all-files access is granted
+            // the system has nothing left to ask, and on some devices the request returns without showing
+            // anything or deleting the rows - pressing Delete looked like a no-op. Delete them directly
+            // in that case; without all-files access the system prompt is still the only allowed path.
+            if (canDeleteWithoutPrompt()) {
+                val deleted = withContext(Dispatchers.IO) { repository.deleteMedia(items) }
+                if (deleted > 0) {
+                    _userMessage.emit(strings.deletedPermanently)
+                    clearSelection()
+                    loadTrash()
+                    loadMedia()
+                    _selectedAlbum.value?.let { loadAlbumContents(it) }
+                    return@launch
+                }
+            }
             val pendingIntent = withContext(Dispatchers.IO) { repository.createDeleteRequest(items.map { it.uri }) }
             if (pendingIntent != null) {
                 _pendingIntentSender.emit(pendingIntent)
             } else {
                 _userMessage.emit(strings.deletedPermanently)
+                clearSelection()
                 loadTrash()
                 loadMedia()
             }
         }
     }
 
+    /** True when the app may remove media itself instead of asking through a MediaStore PendingIntent. */
+    private fun canDeleteWithoutPrompt(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+
     /**
      * Permanently deletes all items in trash.
      */
     fun emptyTrash() {
         viewModelScope.launch {
-            val uris = _trashedMediaState.value.map { it.uri }
-            if (uris.isEmpty()) return@launch
-            val pendingIntent = withContext(Dispatchers.IO) { repository.createDeleteRequest(uris) }
+            val items = _trashedMediaState.value
+            if (items.isEmpty()) return@launch
+            if (canDeleteWithoutPrompt()) {
+                val deleted = withContext(Dispatchers.IO) { repository.deleteMedia(items) }
+                if (deleted > 0) {
+                    _userMessage.emit(strings.trashEmptied)
+                    loadTrash()
+                    loadMedia()
+                    return@launch
+                }
+            }
+            val pendingIntent = withContext(Dispatchers.IO) { repository.createDeleteRequest(items.map { it.uri }) }
             if (pendingIntent != null) {
                 _pendingIntentSender.emit(pendingIntent)
             } else {
