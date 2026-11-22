@@ -4,6 +4,7 @@ name: Build release APK
 # be compared byte for byte with F-Droid's own build (reproducible build). The R8 code shrinker writes different
 # line endings on Windows, so release builds meant for publishing are made here, not on a Windows PC.
 # The APK is signed afterwards, on the maintainer's own computer; the signing key never leaves it.
+# The unsigned APK is only uploaded as a workflow artifact - it is never attached to a GitHub release.
 #
 # This is the normal build: the Gradle wrapper downloads Gradle 8.9 from services.gradle.org and verifies
 # its SHA-256. If that download is unavailable, run "Build release APK (mirror)" instead, which fetches
@@ -11,10 +12,6 @@ name: Build release APK
 
 on:
   workflow_dispatch:
-
-permissions:
-  # Required so the workflow can publish a GitHub release for the run.
-  contents: write
 
 jobs:
   build:
@@ -40,33 +37,3 @@ jobs:
           name: Gallery-unsigned-${{ github.ref_name }}
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
-
-      # Publishes the build and attaches the unsigned APK to the release, so it can be downloaded as a
-      # plain .apk instead of being unpacked from the artifact zip. The maintainer signs it locally.
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          VERSION_NAME=$(awk -F'"' '/^[[:space:]]*versionName = / { print $2; exit }' app/build.gradle.kts)
-          if [ -z "$VERSION_NAME" ]; then
-            echo "Could not read versionName from app/build.gradle.kts" >&2
-            exit 1
-          fi
-          TAG="v${VERSION_NAME}"
-          TITLE="YS Gallery ${VERSION_NAME}"
-          COMMIT_SHA=$(git rev-parse --short HEAD)
-          COMMIT_SUBJECT=$(git log -1 --pretty=%s)
-          COMMIT_BODY=$(git log -1 --pretty=%b)
-          BODY="Built from commit ${COMMIT_SHA}: ${COMMIT_SUBJECT}"
-          if [ -n "$COMMIT_BODY" ]; then
-            BODY="${BODY}"$'\n\n'"${COMMIT_BODY}"
-          fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; refreshing its APK."
-          else
-            gh release create "$TAG" --target "${{ github.sha }}" --title "$TITLE" --notes "$BODY"
-          fi
-          gh release upload "$TAG" \
-            "app/build/outputs/apk/release/app-release-unsigned.apk#Gallery-unsigned-${VERSION_NAME}.apk" \
-            --clobber

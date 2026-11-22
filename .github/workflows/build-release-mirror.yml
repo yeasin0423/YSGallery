@@ -5,14 +5,11 @@ name: Build release APK (mirror)
 # block a release. Run this only when the normal workflow fails while downloading Gradle.
 #
 # The archive is the unmodified official gradle-8.9-bin.zip (SHA-256 below), attached to the
-# v2.7-b12 release. The APK is still built here; only the Gradle download differs.
+# v2.7-b12 release. The APK is still built here; only the Gradle download differs. Like the normal
+# workflow, the unsigned APK is uploaded as an artifact only and never attached to a release.
 
 on:
   workflow_dispatch:
-
-permissions:
-  # Required so the workflow can publish a GitHub release for the run.
-  contents: write
 
 jobs:
   build:
@@ -46,33 +43,3 @@ jobs:
           name: Gallery-unsigned-${{ github.ref_name }}
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
-
-      # Same release step as the normal workflow: one release per version with the unsigned APK
-      # attached for direct download. The maintainer signs it locally.
-      - name: Create GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          VERSION_NAME=$(awk -F'"' '/^[[:space:]]*versionName = / { print $2; exit }' app/build.gradle.kts)
-          if [ -z "$VERSION_NAME" ]; then
-            echo "Could not read versionName from app/build.gradle.kts" >&2
-            exit 1
-          fi
-          TAG="v${VERSION_NAME}"
-          TITLE="YS Gallery ${VERSION_NAME}"
-          COMMIT_SHA=$(git rev-parse --short HEAD)
-          COMMIT_SUBJECT=$(git log -1 --pretty=%s)
-          COMMIT_BODY=$(git log -1 --pretty=%b)
-          BODY="Built from commit ${COMMIT_SHA}: ${COMMIT_SUBJECT}"
-          if [ -n "$COMMIT_BODY" ]; then
-            BODY="${BODY}"$'\n\n'"${COMMIT_BODY}"
-          fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; refreshing its APK."
-          else
-            gh release create "$TAG" --target "${{ github.sha }}" --title "$TITLE" --notes "$BODY"
-          fi
-          gh release upload "$TAG" \
-            "app/build/outputs/apk/release/app-release-unsigned.apk#Gallery-unsigned-${VERSION_NAME}.apk" \
-            --clobber
