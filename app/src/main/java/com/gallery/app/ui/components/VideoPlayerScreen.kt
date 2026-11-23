@@ -78,6 +78,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -178,6 +179,25 @@ fun VideoPlayerScreen(
         activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
     var orientation by remember { mutableStateOf(PlayerOrientation.AUTO) }
+
+    // The player canvas is always black, so its system bar icons must stay white even when the gallery
+    // is in the light theme. Put the theme's own choice back when the player closes.
+    DisposableEffect(activity) {
+        val window = activity?.window
+        if (window == null) {
+            onDispose { }
+        } else {
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            val previousStatus = controller.isAppearanceLightStatusBars
+            val previousNavigation = controller.isAppearanceLightNavigationBars
+            controller.isAppearanceLightStatusBars = false
+            controller.isAppearanceLightNavigationBars = false
+            onDispose {
+                controller.isAppearanceLightStatusBars = previousStatus
+                controller.isAppearanceLightNavigationBars = previousNavigation
+            }
+        }
+    }
 
     val exoPlayer = remember(item.uri) {
         val renderersFactory = DefaultRenderersFactory(context)
