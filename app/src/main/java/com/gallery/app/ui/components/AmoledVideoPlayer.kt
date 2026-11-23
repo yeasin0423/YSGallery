@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.gallery.app.model.MediaItem
+import com.gallery.app.ui.theme.LocalAppTheme
 
 /**
  * The still a video shows inside the viewer's pager: the cached thumbnail, with the sharp first
@@ -43,10 +44,13 @@ fun AmoledVideoPlayer(
     onPlay: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // The page behind the letterboxed frame follows the theme, like a photo page does. A black page
+    // also hid the status bar icons in the light theme, because those icons turn dark.
+    val palette = LocalAppTheme.current.palette
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(palette.background)
             .pointerInput(isActivePage) {
                 if (isActivePage) detectTapGestures(onTap = { onTap() })
             },
