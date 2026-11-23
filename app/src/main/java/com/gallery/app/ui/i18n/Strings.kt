@@ -811,7 +811,7 @@ object EnglishStrings : AppStrings {
     override val itemTrashed = "Moved to trash"
     override val restored = "Restored"
     override val allRestored = "All items restored"
-    override val deletedPermanently = "Deleted permanently"
+    override val deletedPermanently = "Deleted"
     override val trashEmptied = "Trash emptied"
     override fun fileRenamed(name: String) = "File renamed to $name"
     override fun error(message: String?) = "Error: $message"
