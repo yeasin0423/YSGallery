@@ -43,6 +43,8 @@ class ExternalViewRequest(val uri: Uri, val uris: List<Uri> = listOf(uri)) {
 
 /**
  * Shows the handed-over files in the viewer of the current design; closing returns to the other app.
+ * A video opens straight in the full-screen player. Photos - and a batch whose first file is a photo -
+ * use the swiping viewer.
  *
  * Files that are in the phone's media library (a camera's shots) get the same viewer as inside the
  * gallery - favourite, edit, share and delete (to the trash, confirmed by the system). Files from
@@ -78,13 +80,16 @@ fun ExternalMediaViewer(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        val singleVideo = items.singleOrNull()?.takeIf { it.isVideo }
-        if (singleVideo != null) {
-            // A video handed over by another app opens as the player itself, not as the gallery's pager
-            // with a play button. Back then closes the player (and the gallery) instead of revealing a
-            // regular media page underneath.
+        // A video another app opened with the gallery opens as the player itself, not as the regular
+        // media page with a play button. This also covers a batch whose first file is a video. Back
+        // then closes the player (and the gallery) instead of revealing a media page underneath.
+        val openedItem = items.getOrNull(
+            request.initialIndex.value.coerceIn(0, items.lastIndex.coerceAtLeast(0))
+        )
+        val openedVideo = openedItem?.takeIf { it.isVideo }
+        if (openedVideo != null) {
             VideoPlayerScreen(
-                item = singleVideo,
+                item = openedVideo,
                 onClose = onClose,
                 modifier = Modifier.fillMaxSize()
             )
