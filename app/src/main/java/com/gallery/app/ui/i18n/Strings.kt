@@ -192,6 +192,9 @@ interface AppStrings {
     val filterAll: String
     val filterImages: String
     val filterVideos: String
+    /** Shown when a picker that only accepts photos is given a video (and the other way round). */
+    val choosePhotoHint: String
+    val chooseVideoHint: String
     fun items(count: Int): String
     fun selectionTitle(count: Int): String
     val largerThumbnails: String
@@ -588,6 +591,8 @@ object EnglishStrings : AppStrings {
     override val filterAll = "All"
     override val filterImages = "Images"
     override val filterVideos = "Videos"
+    override val choosePhotoHint = "Choose a photo"
+    override val chooseVideoHint = "Choose a video"
     override fun items(count: Int) = if (count == 1) "1 item" else "$count items"
     override fun selectionTitle(count: Int) = if (count == 0) "Select items" else "$count selected"
     override val largerThumbnails = "Larger thumbnails"

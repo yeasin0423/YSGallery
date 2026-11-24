@@ -118,12 +118,21 @@ import kotlinx.coroutines.withContext
 /** Screens pushed over the main tabs. */
 private enum class PushedScreen { FAVORITES, TRASH, SETTINGS }
 
+/** What kind of media a PICK / GET_CONTENT caller asked for. */
+data class PickRequest(val images: Boolean, val videos: Boolean)
+
 class MainActivity : ComponentActivity() {
 
     private val viewModel: GalleryViewModel by viewModels()
 
     /** Set when another app opened a photo or video with "Open with"; the activity then shows only that file. */
     private val viewRequest = mutableStateOf<ExternalViewRequest?>(null)
+
+    /**
+     * Set when another app asked for a photo or video (a profile picture, the wallpaper, the Quick
+     * Settings header image). Tapping a grid item then hands it back instead of opening the viewer.
+     */
+    private val pickRequest = mutableStateOf<PickRequest?>(null)
 
     @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -132,7 +141,7 @@ class MainActivity : ComponentActivity() {
         // Automatic brightness: a recreated activity has a new uiMode, so settle the palette before
         // the first frame instead of flashing the previous one.
         ThemeState.syncWithSystem(this)
-        handleViewIntent(intent)
+        handleIntent(intent)
 
         // Compose would otherwise scale every animation by the system "animator duration scale"
         // developer option, and at 0x skip them all. The app's own graphics quality decides instead.
@@ -140,7 +149,13 @@ class MainActivity : ComponentActivity() {
         setContent(parent = recomposer) {
             GalleryTheme {
                 // Closing a handed-over file returns to the app that sent it, like the system gallery does.
-                GalleryApp(viewModel = viewModel, viewRequest = viewRequest.value, onCloseViewRequest = { finish() })
+                GalleryApp(
+                    viewModel = viewModel,
+                    viewRequest = viewRequest.value,
+                    onCloseViewRequest = { finish() },
+                    pickRequest = pickRequest.value,
+                    onPick = { returnPicked(it) }
+                )
             }
         }
     }
@@ -160,7 +175,47 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleViewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        when (intent?.action) {
+            Intent.ACTION_VIEW -> {
+                pickRequest.value = null
+                handleViewIntent(intent)
+            }
+            Intent.ACTION_PICK, Intent.ACTION_GET_CONTENT -> handlePickIntent(intent)
+        }
+    }
+
+    private fun handlePickIntent(intent: Intent) {
+        viewRequest.value = null
+        val type = intent.type.orEmpty()
+        val images = type.isEmpty() || type == "*/*" || type.contains("image")
+        val videos = type.isEmpty() || type == "*/*" || type.contains("video")
+        // A caller that names neither kind gets the normal gallery and may pick anything.
+        pickRequest.value = if (images || videos) PickRequest(images, videos) else PickRequest(true, true)
+    }
+
+    /** Hands the tapped item back to the app that asked for it and closes the gallery. */
+    private fun returnPicked(item: MediaItem) {
+        val request = pickRequest.value ?: return
+        if (item.isVideo && !request.videos) {
+            Toast.makeText(this, strings.choosePhotoHint, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!item.isVideo && !request.images) {
+            Toast.makeText(this, strings.chooseVideoHint, Toast.LENGTH_SHORT).show()
+            return
+        }
+        setResult(
+            RESULT_OK,
+            Intent().apply {
+                data = item.uri
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        )
+        finish()
     }
 
     private fun handleViewIntent(intent: Intent?) {
@@ -184,7 +239,9 @@ class MainActivity : ComponentActivity() {
 fun GalleryApp(
     viewModel: GalleryViewModel,
     viewRequest: ExternalViewRequest? = null,
-    onCloseViewRequest: () -> Unit = {}
+    onCloseViewRequest: () -> Unit = {},
+    pickRequest: PickRequest? = null,
+    onPick: (MediaItem) -> Unit = {}
 ) {
     val graphicsQuality by viewModel.graphicsQuality.collectAsStateWithLifecycle()
     val videoSeekSeconds by viewModel.videoSeekSeconds.collectAsStateWithLifecycle()
@@ -224,7 +281,7 @@ fun GalleryApp(
                             onToggleFavorite = { viewModel.toggleFavorite(it) }
                         )
                     } else {
-                        GalleryAppContent(viewModel, contentHaze)
+                        GalleryAppContent(viewModel, contentHaze, pickRequest, onPick)
                     }
                 }
             }
@@ -236,7 +293,12 @@ fun GalleryApp(
 }
 
 @Composable
-private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeState) {
+private fun GalleryAppContent(
+    viewModel: GalleryViewModel,
+    contentHaze: HazeState,
+    pickRequest: PickRequest? = null,
+    onPick: (MediaItem) -> Unit = {}
+) {
     val context = LocalContext.current
     val onMediaEdited = LocalOnMediaEdited.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -472,7 +534,10 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                         columnCount = columnCount,
                                         onZoomIn = { viewModel.zoomIn() },
                                         onZoomOut = { viewModel.zoomOut() },
-                                        onItemClick = { _, index -> viewModel.openDetail(index, DetailSource.ALL) },
+                                        onItemClick = { item, index ->
+                                            if (pickRequest != null) onPick(item)
+                                            else viewModel.openDetail(index, DetailSource.ALL)
+                                        },
                                         selectedFilter = selectedFilter,
                                         onFilterSelected = { viewModel.selectFilter(it) },
                                         // Overlay detail integration:
@@ -532,7 +597,10 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                                         columnCount = columnCount,
                                         onBreadcrumbClick = { index -> viewModel.navigateToBreadcrumb(index) },
                                         onCreateSubAlbum = { parent, name -> viewModel.createSubAlbum(parent, name) },
-                                        onMediaItemClick = { _, index -> viewModel.openDetail(index, DetailSource.ALBUM) },
+                                        onMediaItemClick = { item, index ->
+                                            if (pickRequest != null) onPick(item)
+                                            else viewModel.openDetail(index, DetailSource.ALBUM)
+                                        },
                                         // Hidden albums integration:
                                         hiddenAlbums = hiddenAlbums,
                                         onHideAlbum = { album -> viewModel.hideAlbum(album) },
@@ -710,7 +778,9 @@ private fun GalleryAppContent(viewModel: GalleryViewModel, contentHaze: HazeStat
                         isFavorite = { id -> favoriteIds.contains(id) },
                         onToggleFavorite = { id -> viewModel.toggleFavorite(id) },
                         columnCount = 4,
-                        deleteDirectly = deleteDirectly
+                        deleteDirectly = deleteDirectly,
+                        pickMode = pickRequest != null,
+                        onPickItem = onPick
                     )
 
                     PushedScreen.TRASH -> {

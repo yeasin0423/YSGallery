@@ -52,7 +52,10 @@ fun FavoritesScreen(
     modifier: Modifier = Modifier,
     columnCount: Int = 4,
     /** Whether deleting skips the trash; only the viewer's confirmation wording needs it. */
-    deleteDirectly: Boolean = false
+    deleteDirectly: Boolean = false,
+    /** Another app is picking a photo: tapping a tile hands it back instead of opening the viewer. */
+    pickMode: Boolean = false,
+    onPickItem: (MediaItem) -> Unit = {}
 ) {
     var selectedDetailIndex by remember { mutableStateOf<Int?>(null) }
     val gridState = rememberLazyGridState()
@@ -107,7 +110,9 @@ fun FavoritesScreen(
                         MediaGridItem(
                             item = item,
                             isFavorite = isFavorite(item.id),
-                            onClick = { selectedDetailIndex = index },
+                            onClick = {
+                                if (pickMode) onPickItem(item) else selectedDetailIndex = index
+                            },
                             modifier = Modifier
                                 .aspectRatio(1f)
                                 .clipToBounds()
