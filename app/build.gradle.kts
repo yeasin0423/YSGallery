@@ -22,8 +22,8 @@ android {
         applicationId = "com.gallery.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 143
-        versionName = "14.3"
+        versionCode = 144
+        versionName = "14.4"
         // True while this version is still in testing; set to false for the published release. The
         // About page shows it (and whether this is a debug build) next to the version.
         buildConfigField("boolean", "PRERELEASE", "false")

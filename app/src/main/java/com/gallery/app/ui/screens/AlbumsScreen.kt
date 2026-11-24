@@ -949,7 +949,12 @@ fun AlbumsScreen(
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
             } else if (currentAlbum != null) {
-                ThemedTopBar(
+                if (pickMode) {
+                    PickerTopBar(
+                        onCancel = onCancelPick,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                } else ThemedTopBar(
                     title = currentAlbum.name,
                     subtitle = strings.items(albumMedia.size),
                     onBack = { onBreadcrumbClick(breadcrumbs.size - 2) },

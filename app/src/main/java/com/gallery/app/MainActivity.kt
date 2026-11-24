@@ -155,7 +155,8 @@ class MainActivity : ComponentActivity() {
                     viewRequest = viewRequest.value,
                     onCloseViewRequest = { finish() },
                     pickRequest = pickRequest.value,
-                    onPick = { returnPicked(it) }
+                    onPick = { returnPicked(it) },
+                    onCancelPick = { cancelPick() }
                 )
             }
         }
@@ -257,7 +258,8 @@ fun GalleryApp(
     viewRequest: ExternalViewRequest? = null,
     onCloseViewRequest: () -> Unit = {},
     pickRequest: PickRequest? = null,
-    onPick: (MediaItem) -> Unit = {}
+    onPick: (MediaItem) -> Unit = {},
+    onCancelPick: () -> Unit = {}
 ) {
     val graphicsQuality by viewModel.graphicsQuality.collectAsStateWithLifecycle()
     val videoSeekSeconds by viewModel.videoSeekSeconds.collectAsStateWithLifecycle()
@@ -297,7 +299,7 @@ fun GalleryApp(
                             onToggleFavorite = { viewModel.toggleFavorite(it) }
                         )
                     } else {
-                        GalleryAppContent(viewModel, contentHaze, pickRequest, onPick)
+                        GalleryAppContent(viewModel, contentHaze, pickRequest, onPick, onCancelPick)
                     }
                 }
             }
@@ -313,7 +315,8 @@ private fun GalleryAppContent(
     viewModel: GalleryViewModel,
     contentHaze: HazeState,
     pickRequest: PickRequest? = null,
-    onPick: (MediaItem) -> Unit = {}
+    onPick: (MediaItem) -> Unit = {},
+    onCancelPick: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val onMediaEdited = LocalOnMediaEdited.current
@@ -580,7 +583,7 @@ private fun GalleryAppContent(
                                         onOpenSettings = { isSettingsOpen = true },
                                         deleteDirectly = deleteDirectly,
                                         pickMode = pickRequest != null,
-                                        onCancelPick = { cancelPick() },
+                                        onCancelPick = onCancelPick,
                                         onPickItem = onPick
                                     )
                                 }
@@ -655,7 +658,7 @@ private fun GalleryAppContent(
                                         onOpenSettings = { isSettingsOpen = true },
                                         deleteDirectly = deleteDirectly,
                                         pickMode = pickRequest != null,
-                                        onCancelPick = { cancelPick() },
+                                        onCancelPick = onCancelPick,
                                         onPickItem = onPick
                                     )
                                 }
@@ -797,7 +800,7 @@ private fun GalleryAppContent(
                         deleteDirectly = deleteDirectly,
                         pickMode = pickRequest != null,
                         onPickItem = onPick,
-                        onCancelPick = { cancelPick() }
+                        onCancelPick = onCancelPick
                     )
 
                     PushedScreen.TRASH -> {

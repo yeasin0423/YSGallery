@@ -936,8 +936,9 @@ private fun DetailTopBar(actions: DetailActions) {
         OneUiChromeCircle(
             Icons.Rounded.MoreVert,
             strings.options,
-            Modifier.onGloballyPositioned { moreBounds = it.boundsInRoot() }
-        ) { actions.onMore(moreBounds) }
+            Modifier.onGloballyPositioned { moreBounds = it.boundsInRoot() },
+            onClick = { actions.onMore(moreBounds) }
+        )
     }
 }
 
