@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.gallery.app.model.MediaItem
 import com.gallery.app.ui.components.MediaGridItem
+import com.gallery.app.ui.components.PickerTopBar
 import com.gallery.app.ui.design.ThemedEmptyState
 import com.gallery.app.ui.design.ThemedTopBar
 import com.gallery.app.ui.theme.LocalAppTheme
@@ -55,7 +56,8 @@ fun FavoritesScreen(
     deleteDirectly: Boolean = false,
     /** Another app is picking a photo: tapping a tile hands it back instead of opening the viewer. */
     pickMode: Boolean = false,
-    onPickItem: (MediaItem) -> Unit = {}
+    onPickItem: (MediaItem) -> Unit = {},
+    onCancelPick: () -> Unit = {}
 ) {
     var selectedDetailIndex by remember { mutableStateOf<Int?>(null) }
     val gridState = rememberLazyGridState()
@@ -69,6 +71,8 @@ fun FavoritesScreen(
     BackHandler {
         if (selectedDetailIndex != null) {
             selectedDetailIndex = null
+        } else if (pickMode) {
+            onCancelPick()
         } else {
             onBack()
         }
@@ -110,9 +114,7 @@ fun FavoritesScreen(
                         MediaGridItem(
                             item = item,
                             isFavorite = isFavorite(item.id),
-                            onClick = {
-                                if (pickMode) onPickItem(item) else selectedDetailIndex = index
-                            },
+                            onClick = { selectedDetailIndex = index },
                             modifier = Modifier
                                 .aspectRatio(1f)
                                 .clipToBounds()
@@ -123,13 +125,20 @@ fun FavoritesScreen(
             }
         }
 
-        ThemedTopBar(
-            title = strings.favorites,
-            subtitle = strings.items(favoriteItems.size),
-            onBack = onBack,
-            hazeState = favoritesHaze,
-            modifier = Modifier.align(Alignment.TopCenter)
-        )
+        if (pickMode) {
+            PickerTopBar(
+                onCancel = onCancelPick,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        } else {
+            ThemedTopBar(
+                title = strings.favorites,
+                subtitle = strings.items(favoriteItems.size),
+                onBack = onBack,
+                hazeState = favoritesHaze,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+        }
 
         com.gallery.app.ui.design.BottomEdgeFade(Modifier.align(Alignment.BottomCenter))
 
@@ -149,7 +158,9 @@ fun FavoritesScreen(
                     onRenameItem = onRenameItem,
                     isFavorite = isFavorite,
                     onToggleFavorite = onToggleFavorite,
-                    deleteDirectly = deleteDirectly
+                    deleteDirectly = deleteDirectly,
+                    pickMode = pickMode,
+                    onPickConfirm = onPickItem
                 )
         }
     }

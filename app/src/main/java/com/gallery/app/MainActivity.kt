@@ -82,6 +82,7 @@ import com.gallery.app.ui.viewmodel.DetailSource
 import com.gallery.app.ui.viewmodel.GalleryTab
 import com.gallery.app.ui.viewmodel.GalleryUiState
 import com.gallery.app.ui.viewmodel.GalleryViewModel
+import com.gallery.app.ui.viewmodel.MediaFilter
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -195,6 +196,21 @@ class MainActivity : ComponentActivity() {
         val videos = type.isEmpty() || type == "*/*" || type.contains("video")
         // A caller that names neither kind gets the normal gallery and may pick anything.
         pickRequest.value = if (images || videos) PickRequest(images, videos) else PickRequest(true, true)
+        // Show only what the caller can take. The activity finishes after picking, so this filter is
+        // not left behind for the next normal launch.
+        viewModel.selectFilter(
+            when {
+                images && !videos -> MediaFilter.IMAGES
+                videos && !images -> MediaFilter.VIDEOS
+                else -> MediaFilter.ALL
+            }
+        )
+    }
+
+    /** The picker was closed without a choice: back to the app that asked, with no result. */
+    private fun cancelPick() {
+        pickRequest.value = null
+        finish()
     }
 
     /** Hands the tapped item back to the app that asked for it and closes the gallery. */
@@ -534,10 +550,7 @@ private fun GalleryAppContent(
                                         columnCount = columnCount,
                                         onZoomIn = { viewModel.zoomIn() },
                                         onZoomOut = { viewModel.zoomOut() },
-                                        onItemClick = { item, index ->
-                                            if (pickRequest != null) onPick(item)
-                                            else viewModel.openDetail(index, DetailSource.ALL)
-                                        },
+                                        onItemClick = { _, index -> viewModel.openDetail(index, DetailSource.ALL) },
                                         selectedFilter = selectedFilter,
                                         onFilterSelected = { viewModel.selectFilter(it) },
                                         // Overlay detail integration:
@@ -565,7 +578,10 @@ private fun GalleryAppContent(
                                         onDeleteSelected = { viewModel.trashSelectedMedia() },
                                         graphicsQuality = graphicsQuality,
                                         onOpenSettings = { isSettingsOpen = true },
-                                        deleteDirectly = deleteDirectly
+                                        deleteDirectly = deleteDirectly,
+                                        pickMode = pickRequest != null,
+                                        onCancelPick = { cancelPick() },
+                                        onPickItem = onPick
                                     )
                                 }
 
@@ -597,10 +613,7 @@ private fun GalleryAppContent(
                                         columnCount = columnCount,
                                         onBreadcrumbClick = { index -> viewModel.navigateToBreadcrumb(index) },
                                         onCreateSubAlbum = { parent, name -> viewModel.createSubAlbum(parent, name) },
-                                        onMediaItemClick = { item, index ->
-                                            if (pickRequest != null) onPick(item)
-                                            else viewModel.openDetail(index, DetailSource.ALBUM)
-                                        },
+                                        onMediaItemClick = { _, index -> viewModel.openDetail(index, DetailSource.ALBUM) },
                                         // Hidden albums integration:
                                         hiddenAlbums = hiddenAlbums,
                                         onHideAlbum = { album -> viewModel.hideAlbum(album) },
@@ -640,7 +653,10 @@ private fun GalleryAppContent(
                                         albumBytes = { viewModel.albumBytes(it) },
                                         freeByStorage = freeByStorage,
                                         onOpenSettings = { isSettingsOpen = true },
-                                        deleteDirectly = deleteDirectly
+                                        deleteDirectly = deleteDirectly,
+                                        pickMode = pickRequest != null,
+                                        onCancelPick = { cancelPick() },
+                                        onPickItem = onPick
                                     )
                                 }
                             }
@@ -780,7 +796,8 @@ private fun GalleryAppContent(
                         columnCount = 4,
                         deleteDirectly = deleteDirectly,
                         pickMode = pickRequest != null,
-                        onPickItem = onPick
+                        onPickItem = onPick,
+                        onCancelPick = { cancelPick() }
                     )
 
                     PushedScreen.TRASH -> {

@@ -103,6 +103,7 @@ import com.gallery.app.model.AlbumItem
 import com.gallery.app.model.MediaItem
 import com.gallery.app.ui.components.LargeHeader
 import com.gallery.app.ui.components.MediaGridItem
+import com.gallery.app.ui.components.PickerTopBar
 import com.gallery.app.ui.components.SelectionTopBar
 import com.gallery.app.ui.components.detectDragSelect
 import com.gallery.app.ui.components.detectPinchToZoomGrid
@@ -239,7 +240,11 @@ fun AlbumsScreen(
     /** Opens the settings hub from the ⋮ menu. */
     onOpenSettings: () -> Unit = {},
     /** Whether deleting skips the trash; only the viewer's confirmation wording needs it. */
-    deleteDirectly: Boolean = false
+    deleteDirectly: Boolean = false,
+    /** Another app is picking a photo: show the picker bar and confirm from the preview. */
+    pickMode: Boolean = false,
+    onCancelPick: () -> Unit = {},
+    onPickItem: (MediaItem) -> Unit = {}
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var showCreateSubDialog by remember { mutableStateOf(false) }
@@ -680,7 +685,9 @@ fun AlbumsScreen(
                         item(span = { GridItemSpan(maxLineSpan) }, key = "albums_header") {
                             // While the search is open the field takes the header's place, so the albums
                             // below it stay on screen and thin out as the name is typed.
-                            if (albumSearchOpen) {
+                            if (pickMode) {
+                                PickerTopBar(onCancel = onCancelPick)
+                            } else if (albumSearchOpen) {
                                 AlbumSearchBar(
                                     query = albumSearchQuery,
                                     onQueryChange = { albumSearchQuery = it },
@@ -1007,7 +1014,9 @@ fun AlbumsScreen(
                     isFavorite = isFavorite,
                     onToggleFavorite = onToggleFavorite,
                     onPageChanged = onDetailIndexChanged,
-                    deleteDirectly = deleteDirectly
+                    deleteDirectly = deleteDirectly,
+                    pickMode = pickMode,
+                    onPickConfirm = onPickItem
                 )
         }
     }

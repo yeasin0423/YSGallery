@@ -55,6 +55,8 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.ui.layout.boundsInRoot
@@ -152,6 +154,9 @@ fun MediaDetailScreen(
     allowRename: Boolean = true,
     /** Whether deleting goes straight past the trash; only changes the confirmation's wording. */
     deleteDirectly: Boolean = false,
+    /** Another app is picking: the top bar shows a cross (back) and a tick (confirm). */
+    pickMode: Boolean = false,
+    onPickConfirm: (MediaItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (mediaList.isEmpty()) {
@@ -517,14 +522,18 @@ fun MediaDetailScreen(
                     alpha = 1f - (dismissOffset / 220f).coerceIn(0f, 1f)
                 }
         ) {
-            DetailTopBar(actions)
+            if (pickMode) {
+                DetailPickTopBar(onClose = onBack, onConfirm = { onPickConfirm(currentItem) })
+            } else {
+                DetailTopBar(actions)
+            }
         }
 
         val bottomBar: @Composable BoxScope.() -> Unit = {
             AnimatedVisibility(
                 // Fades with the panel through its alpha below (no visibility switch halfway, which recomposed);
-                // once the panel is up it covers the bar and takes its touches.
-                visible = showControls,
+                // once the panel is up it covers the bar and takes its touches. A pick preview has no actions.
+                visible = showControls && !pickMode,
                 enter = fadeIn(tween(160)),
                 exit = fadeOut(tween(160)),
                 modifier = Modifier
@@ -551,7 +560,7 @@ fun MediaDetailScreen(
         }
         bottomBar()
 
-        if (panelComposed && panelHeightPx > 0f) {
+        if (panelComposed && panelHeightPx > 0f && !pickMode) {
             InfoPanel(
                 item = currentItem,
                 onEdit = if (viewOnly) null else actions.onEdit,
@@ -932,6 +941,26 @@ private fun DetailTopBar(actions: DetailActions) {
     }
 }
 
+/**
+ * The preview another app's picker opens on a photo: close on the left, confirm on the right. The
+ * photo itself stays on the theme's background, without the viewer's action capsule.
+ */
+@Composable
+private fun DetailPickTopBar(onClose: () -> Unit, onConfirm: () -> Unit) {
+    val palette = LocalAppTheme.current.palette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OneUiChromeCircle(Icons.Rounded.Close, strings.cancel, Modifier, onClose)
+        Spacer(modifier = Modifier.weight(1f))
+        OneUiChromeCircle(Icons.Rounded.Check, strings.done, Modifier, onConfirm, tint = palette.accent)
+    }
+}
+
 @Composable
 private fun DetailBottomBar(
     actions: DetailActions,
@@ -1059,7 +1088,13 @@ private fun ChromeIcon(
 }
 
 @Composable
-private fun OneUiChromeCircle(icon: ImageVector, description: String, modifier: Modifier, onClick: () -> Unit) {
+private fun OneUiChromeCircle(
+    icon: ImageVector,
+    description: String,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    tint: Color? = null
+) {
     val palette = LocalAppTheme.current.palette
     val interaction = remember { MutableInteractionSource() }
     Box(
@@ -1071,7 +1106,7 @@ private fun OneUiChromeCircle(icon: ImageVector, description: String, modifier: 
             .clickable(interactionSource = interaction, indication = ripple(color = palette.onBackground), onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, description, tint = palette.onBackground, modifier = Modifier.size(25.dp))
+        Icon(icon, description, tint = tint ?: palette.onBackground, modifier = Modifier.size(25.dp))
     }
 }
 

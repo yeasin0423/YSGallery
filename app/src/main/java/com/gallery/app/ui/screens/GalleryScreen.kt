@@ -64,6 +64,7 @@ import com.gallery.app.ui.components.FastScroller
 import com.gallery.app.ui.components.FilterChips
 import com.gallery.app.ui.components.LargeHeader
 import com.gallery.app.ui.components.MediaGridItem
+import com.gallery.app.ui.components.PickerTopBar
 import com.gallery.app.ui.components.detectPinchToZoomGrid
 import com.gallery.app.ui.components.SelectionTopBar
 import com.gallery.app.ui.components.OneUiSelectAll
@@ -131,7 +132,11 @@ fun GalleryScreen(
     graphicsQuality: com.gallery.app.PerformanceProfile = com.gallery.app.PerformanceProfile.MEDIUM,
     onOpenSettings: () -> Unit = {},
     /** Whether deleting skips the trash; only the viewer's confirmation wording needs it. */
-    deleteDirectly: Boolean = false
+    deleteDirectly: Boolean = false,
+    /** Another app is picking a photo: show the picker bar and confirm from the preview. */
+    pickMode: Boolean = false,
+    onCancelPick: () -> Unit = {},
+    onPickItem: (MediaItem) -> Unit = {}
 ) {
     // Intercept back button if in selection mode and detail overlay is not open
     if (isSelectionMode && selectedDetailIndex == null) {
@@ -178,7 +183,9 @@ fun GalleryScreen(
             }
         } else if (items.isEmpty()) {
             Column(modifier = Modifier.fillMaxSize()) {
-                if (onBackClick != null) {
+                if (pickMode) {
+                    PickerTopBar(onCancel = onCancelPick)
+                } else if (onBackClick != null) {
                     ThemedTopBar(title = screenTitle, onBack = onBackClick)
                 } else {
                     LargeHeader(title = screenTitle)
@@ -310,7 +317,7 @@ fun GalleryScreen(
                     contentPadding = PaddingValues(
                         start = gridPadding,
                         end = gridPadding,
-                        top = if (onBackClick != null) statusBarTop + 64.dp else 0.dp,
+                        top = if (onBackClick != null || pickMode) statusBarTop + 64.dp else 0.dp,
                         bottom = bottomPadding
                     ),
                     horizontalArrangement = Arrangement.spacedBy(gridSpacing),
@@ -322,7 +329,11 @@ fun GalleryScreen(
                         key = "grid_top_header",
                         contentType = "header"
                     ) {
-                        if (onBackClick == null) {
+                        if (pickMode) {
+                            // The picker bar is drawn pinned above the grid; this item only keeps the
+                            // list's first row below it.
+                            Spacer(modifier = Modifier.height(0.dp))
+                        } else if (onBackClick == null) {
                             GalleryHeader(
                                 title = screenTitle,
                                 collapseFraction = { headerCollapseFraction },
@@ -402,6 +413,11 @@ fun GalleryScreen(
 
             if (!isSelectionMode) {
                 when {
+                    pickMode -> PickerTopBar(
+                        onCancel = onCancelPick,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+
                     onBackClick != null -> ThemedTopBar(
                         title = screenTitle,
                         subtitle = countText,
@@ -505,7 +521,9 @@ fun GalleryScreen(
                     isFavorite = isFavorite,
                     onToggleFavorite = onToggleFavorite,
                     onPageChanged = onDetailIndexChanged,
-                    deleteDirectly = deleteDirectly
+                    deleteDirectly = deleteDirectly,
+                    pickMode = pickMode,
+                    onPickConfirm = onPickItem
                 )
         }
     }

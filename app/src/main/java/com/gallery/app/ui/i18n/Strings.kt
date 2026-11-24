@@ -195,6 +195,8 @@ interface AppStrings {
     /** Shown when a picker that only accepts photos is given a video (and the other way round). */
     val choosePhotoHint: String
     val chooseVideoHint: String
+    /** Title of the bar shown while another app is picking a photo. */
+    val pleaseSelect: String
     fun items(count: Int): String
     fun selectionTitle(count: Int): String
     val largerThumbnails: String
@@ -547,7 +549,7 @@ object EnglishStrings : AppStrings {
     override val blackPoint = "Black point"
     override val whitePoint = "White point"
     override val highlights = "Highlights"
-    override val saveCopy = "Save copy"
+    override val saveCopy = "Save as copy"
     override val discard = "Discard"
     override val unsavedTitle = "Discard changes?"
     override val unsavedMessage = "Your edits have not been saved. Save a copy before leaving the editor?"
@@ -593,6 +595,7 @@ object EnglishStrings : AppStrings {
     override val filterVideos = "Videos"
     override val choosePhotoHint = "Choose a photo"
     override val chooseVideoHint = "Choose a video"
+    override val pleaseSelect = "Please select"
     override fun items(count: Int) = if (count == 1) "1 item" else "$count items"
     override fun selectionTitle(count: Int) = if (count == 0) "Select items" else "$count selected"
     override val largerThumbnails = "Larger thumbnails"
