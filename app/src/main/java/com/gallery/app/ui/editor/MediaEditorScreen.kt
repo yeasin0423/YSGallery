@@ -2571,7 +2571,7 @@ private fun SavePill(
                 .padding(start = 18.dp, end = if (canOverwrite) 12.dp else 18.dp, top = 12.dp, bottom = 12.dp)
         ) {
             Text(
-                text = strings.save,
+                text = strings.saveCopy,
                 color = content,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,

@@ -289,7 +289,6 @@ object MediaEditor {
             name,
             "image/jpeg",
             Environment.DIRECTORY_PICTURES,
-            allowedDirectories = listOf(Environment.DIRECTORY_DCIM, Environment.DIRECTORY_PICTURES),
             fallbackDirectory = Environment.DIRECTORY_PICTURES
         )
         try {
@@ -726,7 +725,6 @@ object MediaEditor {
         val collection = MediaStore.Images.Media.getContentUri(volume)
         val uri = insertPending(
             context, collection, editedName(item, rendered.extension), rendered.mimeType, item.relativePath,
-            allowedDirectories = listOf(Environment.DIRECTORY_DCIM, Environment.DIRECTORY_PICTURES),
             fallbackDirectory = Environment.DIRECTORY_PICTURES
         )
         try {
@@ -886,7 +884,6 @@ object MediaEditor {
                 val collection = MediaStore.Video.Media.getContentUri(volume)
                 val uri = insertPending(
                     context, collection, editedName(item, "mp4"), "video/mp4", item.relativePath,
-                    allowedDirectories = listOf(Environment.DIRECTORY_DCIM, Environment.DIRECTORY_MOVIES, Environment.DIRECTORY_PICTURES),
                     fallbackDirectory = Environment.DIRECTORY_MOVIES
                 )
                 try {
@@ -931,26 +928,33 @@ object MediaEditor {
         displayName: String,
         mimeType: String,
         relativePath: String,
-        allowedDirectories: List<String>,
         fallbackDirectory: String
     ): Uri {
-        // MediaStore only accepts certain top-level folders per media type (images: DCIM/Pictures,
-        // videos: DCIM/Movies/Pictures). Originals elsewhere - the storage root, Download, app
-        // folders - get their copy in the default folder instead.
-        val cleanPath = relativePath.trim('/')
-        val topDirectory = cleanPath.substringBefore('/')
-        val targetPath = if (cleanPath.isNotEmpty() && allowedDirectories.any { it.equals(topDirectory, ignoreCase = true) }) {
-            "$cleanPath/"
-        } else {
-            "$fallbackDirectory/"
+        // Save next to the original. MediaStore accepts the folders its media types live in, including
+        // Download and app folders; only a few places (Android/data and the like) are refused. Try the
+        // original folder first and only fall back to the standard one when the provider rejects it.
+        val cleanPath = relativePath.replace('\\', '/').trim('/')
+        val fallback = fallbackDirectory.trim('/')
+        val candidates = buildList {
+            if (cleanPath.isNotEmpty()) add(cleanPath)
+            if (fallback.isNotEmpty() && fallback != cleanPath) add(fallback)
         }
-        val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
-            put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
-            put(MediaStore.MediaColumns.RELATIVE_PATH, targetPath)
-            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        var lastError: Exception? = null
+        for (path in candidates) {
+            try {
+                val values = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "$path/")
+                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                }
+                val uri = context.contentResolver.insert(collection, values)
+                if (uri != null) return uri
+            } catch (e: Exception) {
+                lastError = e
+            }
         }
-        return context.contentResolver.insert(collection, values) ?: error("MediaStore insert failed")
+        throw lastError ?: error("MediaStore insert failed")
     }
 
     private fun publish(context: Context, uri: Uri) {
