@@ -358,7 +358,9 @@ fun MediaDetailScreen(
         }
     )
     val onPhotoTap: () -> Unit = {
-        if (infoMostlyOpen) settleInfo(0f) else showControls = !showControls
+        // The pick preview keeps its close/tick bar (and the system bars) on screen, so a tap there
+        // does not hide the only way out.
+        if (infoMostlyOpen) settleInfo(0f) else if (!pickMode) showControls = !showControls
     }
 
     Box(
@@ -515,7 +517,7 @@ fun MediaDetailScreen(
         }
 
         AnimatedVisibility(
-            visible = showControls,
+            visible = showControls || pickMode,
             enter = fadeIn(tween(160)),
             exit = fadeOut(tween(160)),
             modifier = Modifier
@@ -530,7 +532,6 @@ fun MediaDetailScreen(
                 DetailTopBar(actions)
             }
         }
-
         val bottomBar: @Composable BoxScope.() -> Unit = {
             AnimatedVisibility(
                 // Fades with the panel through its alpha below (no visibility switch halfway, which recomposed);
