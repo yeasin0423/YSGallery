@@ -399,6 +399,11 @@ fun AlbumsScreen(
         albumSelectMode = false
         selectedAlbumIds = emptySet()
     }
+    // A pick that arrives while albums are being ticked must not leave the selection bar over the
+    // picker; the picker owns the screen until it returns or is cancelled.
+    LaunchedEffect(pickMode) {
+        if (pickMode && albumSelectMode) exitAlbumSelection()
+    }
 
     /** Closes the search and forgets what was typed. */
     val closeAlbumSearch: () -> Unit = {
