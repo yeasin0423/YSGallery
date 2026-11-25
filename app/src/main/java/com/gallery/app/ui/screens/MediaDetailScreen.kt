@@ -397,7 +397,7 @@ fun MediaDetailScreen(
                     scaleX = s
                     scaleY = s
                 }
-                .pointerInput(isZoomed, panelHeightPx) {
+                .pointerInput(isZoomed, panelHeightPx, pickMode) {
                     if (isZoomed) return@pointerInput
                     // Decides the direction of a one-finger drag before the pager sees it (Initial pass).
                     // A drag that is mostly vertical - even with some sideways drift - closes the viewer or
@@ -418,7 +418,7 @@ fun MediaDetailScreen(
                                     val vy = if (multiTouch) 0f else velocity.calculateVelocity().y
                                     if (dismissing) {
                                         if (dismissOffset > 170f || vy > 1800f) onBack() else settleDismiss()
-                                    } else {
+                                    } else if (!pickMode) {
                                         val target = when {
                                             vy < -700f -> 1f
                                             vy > 700f -> 0f
@@ -440,14 +440,16 @@ fun MediaDetailScreen(
                                     vertical = true
                                     settleJob?.cancel()
                                     dismissing = infoProgress <= 0.001f && total.y > 0f && dismissOffset >= 0f
-                                    if (!dismissing) panelComposed = true
+                                    // The picker has no details panel, so an upward drag must not
+                                    // pull one in and shift the photo for nothing.
+                                    if (!dismissing && !pickMode) panelComposed = true
                                 }
                             }
                             if (vertical) {
                                 change.consume()
                                 if (dismissing) {
                                     dismissOffset = (dismissOffset + delta.y).coerceAtLeast(0f)
-                                } else if (panelHeightPx > 0f) {
+                                } else if (!pickMode && panelHeightPx > 0f) {
                                     applyInfoDrag(delta.y)
                                 }
                             }

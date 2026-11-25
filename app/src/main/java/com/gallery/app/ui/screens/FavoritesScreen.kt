@@ -56,6 +56,11 @@ fun FavoritesScreen(
     deleteDirectly: Boolean = false,
     /** Another app is picking a photo: tapping a tile hands it back instead of opening the viewer. */
     pickMode: Boolean = false,
+    /** The caller takes several items: tiles are tickable and the bar confirms the whole selection. */
+    pickMultiple: Boolean = false,
+    pickSelectedIds: Set<Long> = emptySet(),
+    onTogglePick: (MediaItem) -> Unit = {},
+    onConfirmPick: () -> Unit = {},
     onPickItem: (MediaItem) -> Unit = {},
     onCancelPick: () -> Unit = {}
 ) {
@@ -67,6 +72,8 @@ fun FavoritesScreen(
     val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     // While the fullscreen viewer covers everything, the grid below it is not drawn at all.
     var gridCoveredByViewer by remember { mutableStateOf(false) }
+    // A multi-select pick turns the grid into tickable tiles.
+    val pickSelectionMode = pickMode && pickMultiple
 
     BackHandler {
         if (selectedDetailIndex != null) {
@@ -114,7 +121,11 @@ fun FavoritesScreen(
                         MediaGridItem(
                             item = item,
                             isFavorite = isFavorite(item.id),
-                            onClick = { selectedDetailIndex = index },
+                            isSelectionMode = pickSelectionMode,
+                            isSelected = pickSelectionMode && item.id in pickSelectedIds,
+                            onClick = {
+                                if (pickSelectionMode) onTogglePick(item) else selectedDetailIndex = index
+                            },
                             modifier = Modifier
                                 .aspectRatio(1f)
                                 .clipToBounds()
@@ -128,6 +139,10 @@ fun FavoritesScreen(
         if (pickMode) {
             PickerTopBar(
                 onCancel = onCancelPick,
+                selectedCount = if (pickMultiple) pickSelectedIds.size else 0,
+                showConfirm = pickMultiple,
+                confirmEnabled = pickSelectedIds.isNotEmpty(),
+                onConfirm = onConfirmPick,
                 modifier = Modifier.align(Alignment.TopCenter)
             )
         } else {

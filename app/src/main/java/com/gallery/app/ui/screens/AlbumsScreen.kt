@@ -243,6 +243,11 @@ fun AlbumsScreen(
     deleteDirectly: Boolean = false,
     /** Another app is picking a photo: show the picker bar and confirm from the preview. */
     pickMode: Boolean = false,
+    /** The caller takes several items: tiles are tickable and the bar confirms the whole selection. */
+    pickMultiple: Boolean = false,
+    pickSelectedIds: Set<Long> = emptySet(),
+    onTogglePick: (MediaItem) -> Unit = {},
+    onConfirmPick: () -> Unit = {},
     onCancelPick: () -> Unit = {},
     onPickItem: (MediaItem) -> Unit = {}
 ) {
@@ -275,6 +280,8 @@ fun AlbumsScreen(
     val palette = theme.palette
     val albumsHaze = remember { HazeState() }
     val isInsideAlbum = currentAlbum != null
+    // A multi-select pick turns the album's media into tickable tiles.
+    val pickSelectionMode = pickMode && pickMultiple
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val density = LocalDensity.current
 
@@ -563,7 +570,7 @@ fun AlbumsScreen(
                         .then(
                             // Holding arranges the list - but not while albums are being ticked, where a
                             // hold would otherwise pick one up mid-selection.
-                            if (!isInsideAlbum && albums.isNotEmpty() && !albumSelectMode && albumSearchTerm == null) {
+                            if (!isInsideAlbum && albums.isNotEmpty() && !albumSelectMode && albumSearchTerm == null && !pickMode) {
                                 Modifier.pointerInput(albums, albumGridState, albumSelectMode) {
                                     val albumKeys = albums.map { it.bucketId }.toSet()
                                     var startPointer = Offset.Zero
@@ -652,6 +659,7 @@ fun AlbumsScreen(
                                 Modifier.detectDragSelect(
                                     items = displayAlbumMedia,
                                     gridState = albumGridState,
+                                    enabled = !pickMode,
                                     isSelectionMode = { isSelectionMode },
                                     onStartSelection = onStartSelection,
                                     onSetSelection = onSetSelection,
@@ -675,7 +683,7 @@ fun AlbumsScreen(
                     contentPadding = PaddingValues(
                         start = outerPadding,
                         end = outerPadding,
-                        top = if (isInsideAlbum) statusBarTop + 68.dp else 0.dp,
+                        top = if (isInsideAlbum || pickMode) statusBarTop + 68.dp else 0.dp,
                         bottom = bottomBarContentPadding(16.dp)
                     ),
                     horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
@@ -686,7 +694,9 @@ fun AlbumsScreen(
                             // While the search is open the field takes the header's place, so the albums
                             // below it stay on screen and thin out as the name is typed.
                             if (pickMode) {
-                                PickerTopBar(onCancel = onCancelPick)
+                                // The picker bar is pinned above the grid; this item only keeps the
+                                // first row below it.
+                                Spacer(modifier = Modifier.height(0.dp))
                             } else if (albumSearchOpen) {
                                 AlbumSearchBar(
                                     query = albumSearchQuery,
@@ -818,7 +828,7 @@ fun AlbumsScreen(
                                                 AlbumTile(
                                                     album = subAlbum,
                                                     onClick = { onAlbumClick(subAlbum) },
-                                                    onLongClick = { anchor -> openAlbumActions(subAlbum, anchor) },
+                                                    onLongClick = if (pickMode) null else { anchor -> openAlbumActions(subAlbum, anchor) },
                                                     compact = true,
                                                     modifier = Modifier.weight(1f)
                                                 )
@@ -846,13 +856,15 @@ fun AlbumsScreen(
                                 MediaGridItem(
                                     item = item,
                                     isFavorite = isFavorite(item.id),
-                                    isSelectionMode = isSelectionMode,
-                                    isSelected = selectedIds.contains(item.id),
+                                    isSelectionMode = isSelectionMode || pickSelectionMode,
+                                    isSelected = selectedIds.contains(item.id) ||
+                                        (pickSelectionMode && item.id in pickSelectedIds),
                                     onClick = {
                                         val isTrailingClickFromLongPress = item.id == lastLongPressId &&
                                             (isLongPressGestureActive || (System.currentTimeMillis() - lastLongPressTime) < 600)
                                         when {
                                             isTrailingClickFromLongPress -> Unit
+                                            pickSelectionMode -> onTogglePick(item)
                                             isSelectionMode -> onToggleSelection(item.id)
                                             else -> onMediaItemClick(item, displayAlbumMedia.indexOf(item))
                                         }
@@ -952,6 +964,12 @@ fun AlbumsScreen(
                 if (pickMode) {
                     PickerTopBar(
                         onCancel = onCancelPick,
+                        onBack = { onBreadcrumbClick(breadcrumbs.size - 2) },
+                        title = currentAlbum.name,
+                        selectedCount = if (pickMultiple) pickSelectedIds.size else 0,
+                        showConfirm = pickMultiple,
+                        confirmEnabled = pickSelectedIds.isNotEmpty(),
+                        onConfirm = onConfirmPick,
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
                 } else ThemedTopBar(
@@ -980,6 +998,16 @@ fun AlbumsScreen(
                         )
                     }
                 }
+            } else if (pickMode) {
+                // Albums list root: the picker bar stays pinned while the albums scroll under it.
+                PickerTopBar(
+                    onCancel = onCancelPick,
+                    selectedCount = if (pickMultiple) pickSelectedIds.size else 0,
+                    showConfirm = pickMultiple,
+                    confirmEnabled = pickSelectedIds.isNotEmpty(),
+                    onConfirm = onConfirmPick,
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
             }
 
         }

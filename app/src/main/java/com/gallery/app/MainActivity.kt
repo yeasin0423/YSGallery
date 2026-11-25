@@ -3,6 +3,7 @@ import com.gallery.app.ui.i18n.strings
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -36,6 +37,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -119,8 +121,8 @@ import kotlinx.coroutines.withContext
 /** Screens pushed over the main tabs. */
 private enum class PushedScreen { FAVORITES, TRASH, SETTINGS }
 
-/** What kind of media a PICK / GET_CONTENT caller asked for. */
-data class PickRequest(val images: Boolean, val videos: Boolean)
+/** What a PICK / GET_CONTENT caller asked for: which kinds of media, and whether it takes several. */
+data class PickRequest(val images: Boolean, val videos: Boolean, val multiple: Boolean = false)
 
 class MainActivity : ComponentActivity() {
 
@@ -131,7 +133,8 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Set when another app asked for a photo or video (a profile picture, the wallpaper, the Quick
-     * Settings header image). Tapping a grid item then hands it back instead of opening the viewer.
+     * Settings header image). Tapping a grid item opens the picker preview, whose tick hands the
+     * choice back; a caller that allows several gets tickable tiles instead.
      */
     private val pickRequest = mutableStateOf<PickRequest?>(null)
 
@@ -155,8 +158,9 @@ class MainActivity : ComponentActivity() {
                     viewRequest = viewRequest.value,
                     onCloseViewRequest = { finish() },
                     pickRequest = pickRequest.value,
-                    onPick = { returnPicked(it) },
-                    onCancelPick = { cancelPick() }
+                    onPick = { returnPicked(listOf(it)) },
+                    onCancelPick = { cancelPick() },
+                    onConfirmPick = { returnPicked(it) }
                 )
             }
         }
@@ -192,11 +196,32 @@ class MainActivity : ComponentActivity() {
 
     private fun handlePickIntent(intent: Intent) {
         viewRequest.value = null
+        // A pick always starts from a clean gallery, even when the intent arrives while the app is
+        // open in the middle of a selection or with a photo in the viewer.
+        viewModel.clearSelection()
+        viewModel.closeDetail()
+        viewModel.selectTab(GalleryTab.BILDER)
         val type = intent.type.orEmpty()
-        val images = type.isEmpty() || type == "*/*" || type.contains("image")
-        val videos = type.isEmpty() || type == "*/*" || type.contains("video")
+        // Some callers send no type and only a MediaStore collection uri; the path names the kind.
+        val data = intent.dataString.orEmpty()
+        val unknown = type.isEmpty() || type == "*/*"
+        val images = if (unknown) {
+            data.contains("/images") || !data.contains("/video")
+        } else {
+            type.contains("image")
+        }
+        val videos = if (unknown) {
+            data.contains("/video") || !data.contains("/images")
+        } else {
+            type.contains("video")
+        }
+        val multiple = intent.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
         // A caller that names neither kind gets the normal gallery and may pick anything.
-        pickRequest.value = if (images || videos) PickRequest(images, videos) else PickRequest(true, true)
+        pickRequest.value = if (images || videos) {
+            PickRequest(images, videos, multiple)
+        } else {
+            PickRequest(true, true, multiple)
+        }
         // Show only what the caller can take. The activity finishes after picking, so this filter is
         // not left behind for the next normal launch.
         viewModel.selectFilter(
@@ -214,21 +239,30 @@ class MainActivity : ComponentActivity() {
         finish()
     }
 
-    /** Hands the tapped item back to the app that asked for it and closes the gallery. */
-    private fun returnPicked(item: MediaItem) {
+    /** Hands the picked item (or every ticked item) back to the app that asked and closes the gallery. */
+    private fun returnPicked(items: List<MediaItem>) {
         val request = pickRequest.value ?: return
-        if (item.isVideo && !request.videos) {
-            Toast.makeText(this, strings.choosePhotoHint, Toast.LENGTH_SHORT).show()
-            return
-        }
-        if (!item.isVideo && !request.images) {
-            Toast.makeText(this, strings.chooseVideoHint, Toast.LENGTH_SHORT).show()
-            return
+        if (items.isEmpty()) return
+        for (item in items) {
+            if (item.isVideo && !request.videos) {
+                Toast.makeText(this, strings.choosePhotoHint, Toast.LENGTH_SHORT).show()
+                return
+            }
+            if (!item.isVideo && !request.images) {
+                Toast.makeText(this, strings.chooseVideoHint, Toast.LENGTH_SHORT).show()
+                return
+            }
         }
         setResult(
             RESULT_OK,
             Intent().apply {
-                data = item.uri
+                // `data` stays the first item so callers that ignore ClipData still get something.
+                data = items.first().uri
+                if (request.multiple) {
+                    clipData = ClipData.newRawUri("", items.first().uri).apply {
+                        items.drop(1).forEach { addItem(ClipData.Item(it.uri)) }
+                    }
+                }
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         )
@@ -259,7 +293,8 @@ fun GalleryApp(
     onCloseViewRequest: () -> Unit = {},
     pickRequest: PickRequest? = null,
     onPick: (MediaItem) -> Unit = {},
-    onCancelPick: () -> Unit = {}
+    onCancelPick: () -> Unit = {},
+    onConfirmPick: (List<MediaItem>) -> Unit = {}
 ) {
     val graphicsQuality by viewModel.graphicsQuality.collectAsStateWithLifecycle()
     val videoSeekSeconds by viewModel.videoSeekSeconds.collectAsStateWithLifecycle()
@@ -299,7 +334,7 @@ fun GalleryApp(
                             onToggleFavorite = { viewModel.toggleFavorite(it) }
                         )
                     } else {
-                        GalleryAppContent(viewModel, contentHaze, pickRequest, onPick, onCancelPick)
+                        GalleryAppContent(viewModel, contentHaze, pickRequest, onPick, onCancelPick, onConfirmPick)
                     }
                 }
             }
@@ -316,7 +351,8 @@ private fun GalleryAppContent(
     contentHaze: HazeState,
     pickRequest: PickRequest? = null,
     onPick: (MediaItem) -> Unit = {},
-    onCancelPick: () -> Unit = {}
+    onCancelPick: () -> Unit = {},
+    onConfirmPick: (List<MediaItem>) -> Unit = {}
 ) {
     val context = LocalContext.current
     val onMediaEdited = LocalOnMediaEdited.current
@@ -362,6 +398,17 @@ private fun GalleryAppContent(
     // Multi-Select and Hidden Albums state
     val isSelectionMode by viewModel.isSelectionMode.collectAsStateWithLifecycle()
     val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+
+    // Picker state. Single-select callers confirm from the preview; multi-select callers tick tiles
+    // here, and the selection survives switching between Photos and Albums.
+    val pickMultiple = pickRequest?.multiple == true
+    val pickItems = remember(pickRequest) { mutableStateListOf<MediaItem>() }
+    val pickSelectedIds = pickItems.mapTo(HashSet(pickItems.size)) { it.id }
+    val togglePick: (MediaItem) -> Unit = { item ->
+        val index = pickItems.indexOfFirst { it.id == item.id }
+        if (index >= 0) pickItems.removeAt(index) else pickItems.add(item)
+    }
+    val confirmPick = { onConfirmPick(pickItems.toList()) }
     // Opening the collage page hides the grid under a full-screen overlay until it is closed or saved.
     var collageItems by remember { mutableStateOf<List<MediaItem>?>(null) }
     val isMoveSheetOpen by viewModel.isMoveSheetOpen.collectAsStateWithLifecycle()
@@ -477,10 +524,13 @@ private fun GalleryAppContent(
             BackHandler {
                 viewModel.popAlbumBreadcrumb()
             }
+        } else if (pickRequest != null && selectedItemIndex == null) {
+            // At the picker's root, back is the same as the cross: tell the caller nothing was picked.
+            BackHandler { cancelPick() }
         }
 
         // Return to Bilder tab on back press if on Alben or Menü
-        if (selectedTab != GalleryTab.BILDER && !isTrashOpen && !isFavoritesOpen && !isSelectionMode && breadcrumbStack.isEmpty() && selectedItemIndex == null) {
+        if (selectedTab != GalleryTab.BILDER && !isTrashOpen && !isFavoritesOpen && !isSelectionMode && breadcrumbStack.isEmpty() && selectedItemIndex == null && pickRequest == null) {
             BackHandler {
                 viewModel.selectTab(GalleryTab.BILDER)
             }
@@ -583,6 +633,10 @@ private fun GalleryAppContent(
                                         onOpenSettings = { isSettingsOpen = true },
                                         deleteDirectly = deleteDirectly,
                                         pickMode = pickRequest != null,
+                                        pickMultiple = pickMultiple,
+                                        pickSelectedIds = pickSelectedIds,
+                                        onTogglePick = togglePick,
+                                        onConfirmPick = confirmPick,
                                         onCancelPick = onCancelPick,
                                         onPickItem = onPick
                                     )
@@ -658,6 +712,10 @@ private fun GalleryAppContent(
                                         onOpenSettings = { isSettingsOpen = true },
                                         deleteDirectly = deleteDirectly,
                                         pickMode = pickRequest != null,
+                                        pickMultiple = pickMultiple,
+                                        pickSelectedIds = pickSelectedIds,
+                                        onTogglePick = togglePick,
+                                        onConfirmPick = confirmPick,
                                         onCancelPick = onCancelPick,
                                         onPickItem = onPick
                                     )
@@ -799,6 +857,10 @@ private fun GalleryAppContent(
                         columnCount = 4,
                         deleteDirectly = deleteDirectly,
                         pickMode = pickRequest != null,
+                        pickMultiple = pickMultiple,
+                        pickSelectedIds = pickSelectedIds,
+                        onTogglePick = togglePick,
+                        onConfirmPick = confirmPick,
                         onPickItem = onPick,
                         onCancelPick = onCancelPick
                     )

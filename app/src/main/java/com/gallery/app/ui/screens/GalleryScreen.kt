@@ -135,6 +135,11 @@ fun GalleryScreen(
     deleteDirectly: Boolean = false,
     /** Another app is picking a photo: show the picker bar and confirm from the preview. */
     pickMode: Boolean = false,
+    /** The caller takes several items: tiles are tickable and the bar confirms the whole selection. */
+    pickMultiple: Boolean = false,
+    pickSelectedIds: Set<Long> = emptySet(),
+    onTogglePick: (MediaItem) -> Unit = {},
+    onConfirmPick: () -> Unit = {},
     onCancelPick: () -> Unit = {},
     onPickItem: (MediaItem) -> Unit = {}
 ) {
@@ -152,6 +157,8 @@ fun GalleryScreen(
     val countText = strings.items(items.size)
     // While the fullscreen viewer covers everything, the grid below it is not drawn at all.
     var gridCoveredByViewer by remember { mutableStateOf(false) }
+    // A multi-select pick turns the grid into tickable tiles; a single-select pick keeps tap-to-preview.
+    val pickSelectionMode = pickMode && pickMultiple
 
     // Changing the filter lets the new tiles rise and fade in, so the switch is visibly acknowledged
     // instead of the grid being swapped out in a single frame. Drawn in graphicsLayer: no recomposition.
@@ -184,7 +191,13 @@ fun GalleryScreen(
         } else if (items.isEmpty()) {
             Column(modifier = Modifier.fillMaxSize()) {
                 if (pickMode) {
-                    PickerTopBar(onCancel = onCancelPick)
+                    PickerTopBar(
+                        onCancel = onCancelPick,
+                        selectedCount = if (pickMultiple) pickSelectedIds.size else 0,
+                        showConfirm = pickMultiple,
+                        confirmEnabled = pickSelectedIds.isNotEmpty(),
+                        onConfirm = onConfirmPick
+                    )
                 } else if (onBackClick != null) {
                     ThemedTopBar(title = screenTitle, onBack = onBackClick)
                 } else {
@@ -298,6 +311,7 @@ fun GalleryScreen(
                         .detectDragSelect(
                             items = displayItems,
                             gridState = gridState,
+                            enabled = !pickMode,
                             isSelectionMode = { isSelectionMode },
                             onStartSelection = onStartSelection,
                             onSetSelection = onSetSelection,
@@ -379,8 +393,9 @@ fun GalleryScreen(
                         ) { item ->
                             MediaGridItem(
                                 item = item,
-                                isSelectionMode = isSelectionMode,
-                                isSelected = selectedIds.contains(item.id),
+                                isSelectionMode = isSelectionMode || pickSelectionMode,
+                                isSelected = selectedIds.contains(item.id) ||
+                                    (pickSelectionMode && item.id in pickSelectedIds),
                                 isFavorite = isFavorite(item.id),
                                 onClick = {
                                     // Suppressed for the entire duration of an active long-press-drag on
@@ -393,6 +408,8 @@ fun GalleryScreen(
                                         // Same press-release the long-press gesture already handled -
                                         // ignore it instead of letting the tile's own tap detector
                                         // immediately toggle the selection it just made back off.
+                                    } else if (pickSelectionMode) {
+                                        onTogglePick(item)
                                     } else if (isSelectionMode) {
                                         onToggleSelection(item.id)
                                     } else {
@@ -415,6 +432,10 @@ fun GalleryScreen(
                 when {
                     pickMode -> PickerTopBar(
                         onCancel = onCancelPick,
+                        selectedCount = if (pickMultiple) pickSelectedIds.size else 0,
+                        showConfirm = pickMultiple,
+                        confirmEnabled = pickSelectedIds.isNotEmpty(),
+                        onConfirm = onConfirmPick,
                         modifier = Modifier.align(Alignment.TopCenter)
                     )
 

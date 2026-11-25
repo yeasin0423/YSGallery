@@ -166,6 +166,8 @@ private fun SelectionTextAction(text: String, color: Color, onClick: () -> Unit)
 internal fun Modifier.detectDragSelect(
     items: List<MediaItem>,
     gridState: LazyGridState,
+    /** Off while another app is picking: the tiles are tapped, not dragged into a selection. */
+    enabled: Boolean = true,
     isSelectionMode: () -> Boolean,
     onStartSelection: (Long) -> Unit,
     onSetSelection: (Long, Boolean) -> Unit,
@@ -176,6 +178,7 @@ internal fun Modifier.detectDragSelect(
     onLongPressRecognized: (Long) -> Unit,
     onLongPressEnded: () -> Unit
 ): Modifier {
+    if (!enabled) return this
     // The gesture handler keeps running across recompositions, so it must read the selection through the latest
     // callbacks. It used to keep the ones from when it started - "not selecting, nothing selected" - so a second
     // drag while already selecting started a new selection and replaced everything selected so far.
