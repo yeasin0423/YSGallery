@@ -526,7 +526,7 @@ private fun GalleryAppContent(
             }
         } else if (pickRequest != null && selectedItemIndex == null) {
             // At the picker's root, back is the same as the cross: tell the caller nothing was picked.
-            BackHandler { cancelPick() }
+            BackHandler { onCancelPick() }
         }
 
         // Return to Bilder tab on back press if on Alben or Menü
