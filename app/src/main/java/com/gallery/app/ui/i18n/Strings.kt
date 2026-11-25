@@ -323,7 +323,6 @@ interface AppStrings {
     val customColor: String
     val customAccentTitle: String
     fun customAccentMessage(lightMode: Boolean, designName: String): String
-    val customPalette: String
     val language: String
     fun qualityDescription(tier: PerformanceProfile): String
     fun paletteLabel(palette: AppColorPalette, fromWallpaper: Boolean = false): String
@@ -339,7 +338,6 @@ interface AppStrings {
     val appearanceModeHeader: String
     val accentColorHeader: String
     val fromWallpaper: String
-    val wallpaperAccent: String
     val accentFooterText: String
     val appNameLabel: String
     val colorPaletteLabel: String
@@ -351,12 +349,6 @@ interface AppStrings {
     // One UI
     val copyToClipboard: String
     val setAsWallpaper: String
-    val wallpaperHome: String
-    val wallpaperLock: String
-    val wallpaperBoth: String
-    val wallpaperSet: String
-    val liveWallpaper: String
-    val liveWallpaperTooLong: String
     val wallpaperFailed: String
     val imageInfo: String
     val manageStorage: String
@@ -726,7 +718,6 @@ object EnglishStrings : AppStrings {
     override val appearanceModeHeader = "Appearance"
     override val accentColorHeader = "Accent Color"
     override val fromWallpaper = "From wallpaper"
-    override val wallpaperAccent = "Wallpaper accent"
     override val accentFooterText = "The accent color is used for icons, selections and highlighted text."
     override val appNameLabel = "Name"
     override val colorPaletteLabel = "Color Palette"
@@ -734,12 +725,6 @@ object EnglishStrings : AppStrings {
     override val emptyTrashAction = "Empty trash"
     override val copyToClipboard = "Copy to clipboard"
     override val setAsWallpaper = "Set as wallpaper"
-    override val wallpaperHome = "Home screen"
-    override val wallpaperLock = "Lock screen"
-    override val wallpaperBoth = "Home and lock screen"
-    override val wallpaperSet = "Wallpaper set"
-    override val liveWallpaper = "Set as live wallpaper"
-    override val liveWallpaperTooLong = "Only videos up to 15 seconds can be a live wallpaper."
     override val wallpaperFailed = "Could not set the wallpaper"
     override val imageInfo = "Image info"
     override val manageStorage = "Manage storage"
@@ -766,7 +751,6 @@ object EnglishStrings : AppStrings {
     override val customAccentTitle = "Custom accent color"
     override fun customAccentMessage(lightMode: Boolean, designName: String) =
         "The ${if (lightMode) "light" else "dark"} base colors of $designName stay the same - only the accent changes."
-    override val customPalette = "Custom palette"
     override val language = "Language"
     override fun qualityDescription(tier: PerformanceProfile) = when (tier) {
         PerformanceProfile.LOW -> "Just the essentials: no animations, no glass, smaller thumbnails, lowest memory and battery use."
@@ -775,9 +759,17 @@ object EnglishStrings : AppStrings {
         PerformanceProfile.ULTRA -> "The full effect palette: glass, moving waves, the longest animations, the highest image quality and the largest caches."
     }
     override fun paletteLabel(palette: AppColorPalette, fromWallpaper: Boolean) = when {
-        palette.id != CUSTOM_PALETTE_ID -> palette.label
-        fromWallpaper -> wallpaperAccent
-        else -> customPalette
+        palette.id == CUSTOM_PALETTE_ID && fromWallpaper -> "Wallpaper accent"
+        palette.id == CUSTOM_PALETTE_ID -> "Custom palette"
+        else -> when (palette.id) {
+            "oneui_blue" -> "Blue"
+            "oneui_light_blue" -> "Light Blue"
+            "oneui_lavender" -> "Lavender"
+            "oneui_green" -> "Green"
+            "oneui_light_lavender" -> "Light Lavender"
+            "oneui_light_green" -> "Light Green"
+            else -> palette.id
+        }
     }
 
     override val permissions = "Permissions"

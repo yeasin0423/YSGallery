@@ -9,7 +9,7 @@ It is made for custom ROMs that ship without a usable gallery, for phones whose 
 <li>Albums: create, rename, hide, sub-albums, move media between albums, move whole albums between internal storage and SD card</li>
 <li>Favorites and trash</li>
 <li>Deep zoom, readable even on huge photos and very long scroll screenshots</li>
-<li>Editor: crop, rotate and mirror photos and videos (saved as a copy)</li>
+<li>Editor: crop, rotate, adjust, filter, blur, bokeh, draw, text and frames for photos (saved as a copy)</li>
 <li>Storage overview for internal storage and SD card</li>
 <li>Open photos and videos from other apps ("Open with")</li>
 <li>English</li>

@@ -54,7 +54,7 @@ Settings, thumbnails and edits stay in local storage.
 | **Collage** | Select two to nine photos and combine them into one image with a choice of templates, then save it straight to the gallery. |
 | **Keep or clear** | Favorites and a trash you can empty from Settings. |
 | **Storage overview** | Free and used space for internal storage and the SD card, with per-category breakdowns. |
-| **Open with** | Receives photos and videos from other apps, like the system gallery. |
+| **Open with** | Receives photos and videos from other apps, like the system gallery, and appears in the system photo picker. |
 | **Older devices** | Adjustable graphics-quality tiers for low-memory or older phones. |
 | **Private by default** | No internet permission, no analytics, no crash reporting, no account. |
 

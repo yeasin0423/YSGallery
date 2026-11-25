@@ -76,7 +76,6 @@ fun <T> designTween(
 /** A named set of the 8 core colors every screen is built from. */
 data class AppColorPalette(
     val id: String,
-    val label: String,
     val background: Color,
     val onBackground: Color,
     val textMuted: Color,
@@ -126,19 +125,19 @@ val AppColorPalette.destructive: Color get() = if (isLight) Color(0xFFE5302E) el
 
 const val CUSTOM_PALETTE_ID = "custom"
 
-private fun AppColorPalette.variant(id: String, label: String, accent: Color) =
-    copy(id = id, label = label, accent = accent)
+private fun AppColorPalette.variant(id: String, accent: Color) =
+    copy(id = id, accent = accent)
 
 // AMOLED black stays One UI's dark mode.
 private val OneUiDark = AppColorPalette(
-    id = "oneui_blue", label = "Blue",
+    id = "oneui_blue",
     background = Color(0xFF000000), onBackground = Color(0xFFFAFAFA),
     textMuted = Color(0xFF9A9A9A), surface = Color(0xFF171717),
     surfaceVariant = Color(0xFF252525), accent = Color(0xFF3E91FF),
     cardBorder = Color(0xFF2A2A2A), overlayScrim = Color(0x99000000)
 )
 private val OneUiLight = AppColorPalette(
-    id = "oneui_light_blue", label = "Light Blue",
+    id = "oneui_light_blue",
     background = Color(0xFFF6F6F6), onBackground = Color(0xFF111111),
     textMuted = Color(0xFF7A7A7A), surface = Color(0xFFFFFFFF),
     surfaceVariant = Color(0xFFEAEAEA), accent = Color(0xFF0A7CFF),
@@ -149,11 +148,11 @@ private val OneUiLight = AppColorPalette(
 fun presetsFor(language: DesignLanguage): List<AppColorPalette> = when (language) {
     DesignLanguage.SAMSUNG_ONEUI -> listOf(
         OneUiDark,
-        OneUiDark.variant("oneui_lavender", "Lavender", Color(0xFFA99BFF)),
-        OneUiDark.variant("oneui_green", "Green", Color(0xFF3DD68C)),
+        OneUiDark.variant("oneui_lavender", Color(0xFFA99BFF)),
+        OneUiDark.variant("oneui_green", Color(0xFF3DD68C)),
         OneUiLight,
-        OneUiLight.variant("oneui_light_lavender", "Light Lavender", Color(0xFF6F5FD6)),
-        OneUiLight.variant("oneui_light_green", "Light Green", Color(0xFF1E9E5A))
+        OneUiLight.variant("oneui_light_lavender", Color(0xFF6F5FD6)),
+        OneUiLight.variant("oneui_light_green", Color(0xFF1E9E5A))
     )
 }
 

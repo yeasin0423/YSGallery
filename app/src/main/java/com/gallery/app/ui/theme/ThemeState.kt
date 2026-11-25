@@ -115,7 +115,7 @@ object ThemeState {
             } else {
                 WallpaperAccentMemory.remember(context, wallpaper)
                 apply(
-                    base.copy(id = CUSTOM_PALETTE_ID, label = "Custom palette", accent = wallpaper),
+                    base.copy(id = CUSTOM_PALETTE_ID, accent = wallpaper),
                     persist = true,
                     context = context
                 )
@@ -130,7 +130,6 @@ object ThemeState {
             val fallback = presetsFor(language, savedIsLight).first()
             AppColorPalette(
                 id = CUSTOM_PALETTE_ID,
-                label = "Custom palette",
                 background = Color(prefs.getInt(KEY_CUSTOM_BG, fallback.background.toArgb())),
                 onBackground = Color(prefs.getInt(KEY_CUSTOM_ON_BG, fallback.onBackground.toArgb())),
                 textMuted = Color(prefs.getInt(KEY_CUSTOM_TEXT_MUTED, fallback.textMuted.toArgb())),
@@ -184,7 +183,7 @@ object ThemeState {
         if (current.isLight == light) return
         val target = presetsFor(designLanguage, light)
         val next = if (current.id == CUSTOM_PALETTE_ID) {
-            target.first().copy(id = CUSTOM_PALETTE_ID, label = current.label, accent = current.accent)
+            target.first().copy(id = CUSTOM_PALETTE_ID, accent = current.accent)
         } else {
             val slot = presetsFor(designLanguage, current.isLight).indexOfFirst { it.id == current.id }
             target.getOrElse(slot) { target.first() }

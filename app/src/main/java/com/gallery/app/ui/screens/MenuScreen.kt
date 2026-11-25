@@ -299,7 +299,7 @@ internal fun CustomAccentDialog(
 /** Applies a custom accent on the active mode's base colors - light stays light. */
 internal fun applyCustomAccent(context: android.content.Context, lightMode: Boolean, accent: Color) {
     val base = presetsFor(DesignLanguage.SAMSUNG_ONEUI, lightMode).first()
-    val custom = base.copy(id = CUSTOM_PALETTE_ID, label = "Custom palette", accent = accent)
+    val custom = base.copy(id = CUSTOM_PALETTE_ID, accent = accent)
     ThemeState.apply(custom, context = context)
     WallpaperAccentMemory.forget(context)
 }
