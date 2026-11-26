@@ -61,6 +61,7 @@ import com.gallery.app.ui.theme.LocalAppTheme
 import com.gallery.app.ui.theme.ThemeState
 import com.gallery.app.ui.theme.BrightnessMode
 import com.gallery.app.ui.theme.isLight
+import com.gallery.app.ui.theme.materialYouPalette
 import com.gallery.app.ui.theme.presetsFor
 
 /*
@@ -235,6 +236,8 @@ private fun AppearanceContent() {
     val currentLanguage = ThemeState.designLanguage
     val currentPalette = ThemeState.palette
     val lightMode = currentPalette.isLight
+    // Asking Android for the dynamic scheme is not free; only rebuild it when the brightness flips.
+    val materialYou = remember(context, lightMode) { materialYouPalette(context, lightMode) }
     var showCustomEditor by remember { mutableStateOf(false) }
 
     Header(strings.appearanceModeHeader)
@@ -256,7 +259,8 @@ private fun AppearanceContent() {
                 presets = presetsFor(currentLanguage, lightMode),
                 currentPaletteId = currentPalette.id,
                 onSelectPreset = { preset -> ThemeState.apply(preset, context = context) },
-                onOpenCustomEditor = { showCustomEditor = true }
+                onOpenCustomEditor = { showCustomEditor = true },
+                materialYou = materialYou
             )
         }
     }
