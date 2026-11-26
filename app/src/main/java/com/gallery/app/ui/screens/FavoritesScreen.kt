@@ -59,6 +59,9 @@ fun FavoritesScreen(
     /** The caller takes several items: tiles are tickable and the bar confirms the whole selection. */
     pickMultiple: Boolean = false,
     pickSelectedIds: Set<Long> = emptySet(),
+    /** In pick mode, which kinds the caller accepts; the grid hides the rest. */
+    pickImages: Boolean = true,
+    pickVideos: Boolean = true,
     onTogglePick: (MediaItem) -> Unit = {},
     onConfirmPick: () -> Unit = {},
     onPickItem: (MediaItem) -> Unit = {},
@@ -74,6 +77,12 @@ fun FavoritesScreen(
     var gridCoveredByViewer by remember { mutableStateOf(false) }
     // A multi-select pick turns the grid into tickable tiles.
     val pickSelectionMode = pickMode && pickMultiple
+    val displayFavorites = if (pickMode && (!pickImages || !pickVideos)) {
+        // The caller only takes one kind: hide the other, so a photo picker never offers videos.
+        favoriteItems.filter { if (it.isVideo) pickVideos else pickImages }
+    } else {
+        favoriteItems
+    }
 
     BackHandler {
         if (selectedDetailIndex != null) {
@@ -86,7 +95,7 @@ fun FavoritesScreen(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (favoriteItems.isEmpty()) {
+        if (displayFavorites.isEmpty()) {
             ThemedEmptyState(
                 icon = Icons.Rounded.FavoriteBorder,
                 title = strings.noFavorites,
@@ -114,7 +123,7 @@ fun FavoritesScreen(
                     verticalArrangement = Arrangement.spacedBy(theme.shapes.gridSpacing)
                 ) {
                     itemsIndexed(
-                        items = favoriteItems,
+                        items = displayFavorites,
                         key = { _, item -> item.id },
                         contentType = { _, _ -> "media_tile" }
                     ) { index, item ->
@@ -148,7 +157,7 @@ fun FavoritesScreen(
         } else {
             ThemedTopBar(
                 title = strings.favorites,
-                subtitle = strings.items(favoriteItems.size),
+                subtitle = strings.items(displayFavorites.size),
                 onBack = onBack,
                 hazeState = favoritesHaze,
                 modifier = Modifier.align(Alignment.TopCenter)
@@ -165,7 +174,7 @@ fun FavoritesScreen(
             onCoveringChange = { gridCoveredByViewer = it }
         ) {
                 MediaDetailScreen(
-                    mediaList = favoriteItems,
+                    mediaList = displayFavorites,
                     initialIndex = detailIndexHolder[0],
                     onBack = { selectedDetailIndex = null },
                     onTrashItem = onTrashItem,

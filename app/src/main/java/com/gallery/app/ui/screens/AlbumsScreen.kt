@@ -246,6 +246,9 @@ fun AlbumsScreen(
     /** The caller takes several items: tiles are tickable and the bar confirms the whole selection. */
     pickMultiple: Boolean = false,
     pickSelectedIds: Set<Long> = emptySet(),
+    /** In pick mode, which kinds the caller accepts; the album grid hides the rest. */
+    pickImages: Boolean = true,
+    pickVideos: Boolean = true,
     onTogglePick: (MediaItem) -> Unit = {},
     onConfirmPick: () -> Unit = {},
     onCancelPick: () -> Unit = {},
@@ -293,7 +296,12 @@ fun AlbumsScreen(
     val verticalSpacing = if (isInsideAlbum) theme.shapes.gridSpacing else if (rootColumns >= 4) 14.dp else 20.dp
     // Section rows inside an album need their own inset when the media grid runs edge-to-edge.
     val sectionInset = if (outerPadding < 8.dp) 16.dp else 4.dp
-    val displayAlbumMedia = albumMedia
+    val displayAlbumMedia = if (pickMode && (!pickImages || !pickVideos)) {
+        // The caller only takes one kind: hide the other, so a photo picker never offers videos.
+        albumMedia.filter { if (it.isVideo) pickVideos else pickImages }
+    } else {
+        albumMedia
+    }
 
     // Opening an album (or going back up) moves the page in with One UI's album motion.
     val navProgress = remember { androidx.compose.animation.core.Animatable(1f) }
@@ -660,7 +668,7 @@ fun AlbumsScreen(
                             }
                         )
                         .then(
-                            if (isInsideAlbum && albumMedia.isNotEmpty()) {
+                            if (isInsideAlbum && displayAlbumMedia.isNotEmpty()) {
                                 Modifier.detectDragSelect(
                                     items = displayAlbumMedia,
                                     gridState = albumGridState,
@@ -847,10 +855,10 @@ fun AlbumsScreen(
                             }
                         }
 
-                        if (albumMedia.isNotEmpty()) {
+                        if (displayAlbumMedia.isNotEmpty()) {
                             if (albums.isNotEmpty()) {
                                 item(span = { GridItemSpan(maxLineSpan) }, key = "album_media_title") {
-                                    AlbumsSectionTitle(strings.media, albumMedia.size, Modifier.padding(horizontal = sectionInset, vertical = 6.dp))
+                                    AlbumsSectionTitle(strings.media, displayAlbumMedia.size, Modifier.padding(horizontal = sectionInset, vertical = 6.dp))
                                 }
                             }
                             items(

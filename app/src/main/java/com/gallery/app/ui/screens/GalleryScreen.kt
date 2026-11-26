@@ -204,7 +204,7 @@ fun GalleryScreen(
                     LargeHeader(title = screenTitle)
                 }
 
-                if (onFilterSelected != null) {
+                if (onFilterSelected != null && !pickMode) {
                     FilterChips(
                         selectedFilter = selectedFilter,
                         onFilterSelected = onFilterSelected,
