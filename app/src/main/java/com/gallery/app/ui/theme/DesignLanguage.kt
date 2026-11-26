@@ -1,11 +1,7 @@
 package com.gallery.app.ui.theme
 
-import android.content.Context
-import android.os.Build
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.tween
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
@@ -128,31 +124,6 @@ fun AppColorPalette.withReadableAccent(): AppColorPalette {
 val AppColorPalette.destructive: Color get() = if (isLight) Color(0xFFE5302E) else Color(0xFFFF6961)
 
 const val CUSTOM_PALETTE_ID = "custom"
-const val MATERIAL_YOU_PALETTE_ID = "material_you"
-
-/**
- * Android's wallpaper-derived Material You scheme, folded into the app's eight roles. Dark mode keeps
- * the AMOLED-black background One UI uses and takes the cards, accent and outlines from the system
- * scheme, so the palette follows the wallpaper without losing the app's look. Null below Android 12
- * or when the ROM reports nothing.
- */
-fun materialYouPalette(context: Context, light: Boolean): AppColorPalette? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
-    val scheme = runCatching {
-        if (light) dynamicLightColorScheme(context) else dynamicDarkColorScheme(context)
-    }.getOrNull() ?: return null
-    return AppColorPalette(
-        id = MATERIAL_YOU_PALETTE_ID,
-        background = if (light) scheme.background else Color.Black,
-        onBackground = scheme.onBackground,
-        textMuted = scheme.onSurfaceVariant,
-        surface = scheme.surface,
-        surfaceVariant = scheme.surfaceVariant,
-        accent = scheme.primary,
-        cardBorder = scheme.outlineVariant,
-        overlayScrim = scheme.scrim.copy(alpha = if (light) 0.4f else 0.6f)
-    )
-}
 
 private fun AppColorPalette.variant(id: String, accent: Color) =
     copy(id = id, accent = accent)

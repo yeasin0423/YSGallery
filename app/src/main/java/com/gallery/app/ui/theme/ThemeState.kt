@@ -97,7 +97,6 @@ object ThemeState {
             savedPaletteId == null -> preferredLight(context)
             savedPaletteId == CUSTOM_PALETTE_ID ->
                 Color(prefs.getInt(KEY_CUSTOM_BG, Color.Black.toArgb())).luminance() > 0.5f
-            savedPaletteId == MATERIAL_YOU_PALETTE_ID -> preferredLight(context)
             else -> presetsFor(language).find { it.id == savedPaletteId }?.isLight ?: false
         }
 
@@ -140,8 +139,6 @@ object ThemeState {
                 cardBorder = Color(prefs.getInt(KEY_CUSTOM_CARD_BORDER, fallback.cardBorder.toArgb())),
                 overlayScrim = Color(prefs.getInt(KEY_CUSTOM_OVERLAY_SCRIM, fallback.overlayScrim.toArgb()))
             )
-        } else if (savedPaletteId == MATERIAL_YOU_PALETTE_ID) {
-            materialYouPalette(context, savedIsLight) ?: presetsFor(language, savedIsLight).first()
         } else {
             presetsFor(language).find { it.id == savedPaletteId } ?: presetsFor(language, savedIsLight).first()
         }
@@ -161,14 +158,14 @@ object ThemeState {
         context.getSharedPreferences(THEME_PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putString(KEY_BRIGHTNESS_MODE, mode.name)
             .apply()
-        applyBrightness(preferredLight(context), context)
+        applyBrightness(preferredLight(context))
         persistToPrefs(context, palette)
     }
 
     /** Re-applies the phone's brightness when Automatic is on; called on a configuration change. */
     fun syncWithSystem(context: Context) {
         if (brightnessMode != BrightnessMode.SYSTEM) return
-        applyBrightness(preferredLight(context), context)
+        applyBrightness(preferredLight(context))
     }
 
     /** Whether the palette should be light right now, given [brightnessMode]. */
@@ -181,18 +178,15 @@ object ThemeState {
     }
 
     /** Switches light/dark in place, keeping the accent and the preset slot. */
-    private fun applyBrightness(light: Boolean, context: Context) {
+    private fun applyBrightness(light: Boolean) {
         val current = palette
         if (current.isLight == light) return
         val target = presetsFor(designLanguage, light)
-        val next = when (current.id) {
-            CUSTOM_PALETTE_ID -> target.first().copy(id = CUSTOM_PALETTE_ID, accent = current.accent)
-            // The wallpaper scheme has its own light and dark variants, so ask Android again.
-            MATERIAL_YOU_PALETTE_ID -> materialYouPalette(context, light) ?: target.first()
-            else -> {
-                val slot = presetsFor(designLanguage, current.isLight).indexOfFirst { it.id == current.id }
-                target.getOrElse(slot) { target.first() }
-            }
+        val next = if (current.id == CUSTOM_PALETTE_ID) {
+            target.first().copy(id = CUSTOM_PALETTE_ID, accent = current.accent)
+        } else {
+            val slot = presetsFor(designLanguage, current.isLight).indexOfFirst { it.id == current.id }
+            target.getOrElse(slot) { target.first() }
         }
         apply(next, persist = false)
     }

@@ -211,9 +211,7 @@ internal fun PaletteRow(
     presets: List<AppColorPalette>,
     currentPaletteId: String,
     onSelectPreset: (AppColorPalette) -> Unit,
-    onOpenCustomEditor: () -> Unit,
-    /** The wallpaper-derived scheme, shown when Android can provide one (12+). */
-    materialYou: AppColorPalette? = null
+    onOpenCustomEditor: () -> Unit
 ) {
     val theme = LocalAppTheme.current
     val palette = theme.palette
@@ -245,39 +243,6 @@ internal fun PaletteRow(
                         .size(22.dp)
                         .clip(CircleShape)
                         .background(preset.accent)
-                )
-            }
-        }
-        materialYou?.let { my ->
-            val isSelected = my.id == currentPaletteId
-            Box(
-                modifier = Modifier
-                    .selectionPop(isSelected, fromScale = 0.72f, dampingRatio = 0.4f, stiffness = 600f)
-                    .size(44.dp)
-                    .clip(swatchShape)
-                    .background(my.background)
-                    .border(
-                        width = if (isSelected) 2.5.dp else 1.dp,
-                        color = if (isSelected) palette.accent else palette.onBackground.copy(alpha = 0.15f),
-                        shape = swatchShape
-                    )
-                    .clickable { onSelectPreset(my) },
-                contentAlignment = Alignment.Center
-            ) {
-                // Two dots hint that this swatch follows the wallpaper instead of a fixed accent.
-                Box(
-                    modifier = Modifier
-                        .size(22.dp)
-                        .clip(CircleShape)
-                        .background(my.accent)
-                )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .size(12.dp)
-                        .clip(CircleShape)
-                        .background(my.surfaceVariant)
-                        .border(1.dp, my.background, CircleShape)
                 )
             }
         }

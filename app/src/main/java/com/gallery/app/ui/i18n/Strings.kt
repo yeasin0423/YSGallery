@@ -3,7 +3,6 @@ package com.gallery.app.ui.i18n
 import com.gallery.app.PerformanceProfile
 import com.gallery.app.ui.theme.AppColorPalette
 import com.gallery.app.ui.theme.CUSTOM_PALETTE_ID
-import com.gallery.app.ui.theme.MATERIAL_YOU_PALETTE_ID
 import com.gallery.app.ui.viewmodel.MediaFilter
 import java.util.Locale
 
@@ -762,7 +761,6 @@ object EnglishStrings : AppStrings {
     override fun paletteLabel(palette: AppColorPalette, fromWallpaper: Boolean) = when {
         palette.id == CUSTOM_PALETTE_ID && fromWallpaper -> "Wallpaper accent"
         palette.id == CUSTOM_PALETTE_ID -> "Custom palette"
-        palette.id == MATERIAL_YOU_PALETTE_ID -> "Material You"
         else -> when (palette.id) {
             "oneui_blue" -> "Blue"
             "oneui_light_blue" -> "Light Blue"
