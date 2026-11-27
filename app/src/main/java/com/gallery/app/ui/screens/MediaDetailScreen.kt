@@ -195,7 +195,7 @@ fun MediaDetailScreen(
     var playingVideo by remember { mutableStateOf<MediaItem?>(null) }
     // Hiding the controls also hides Android's status and navigation bars (a swipe from the edge shows them briefly).
     val hostView = androidx.compose.ui.platform.LocalView.current
-    androidx.compose.runtime.LaunchedEffect(showControls) {
+    androidx.compose.runtime.LaunchedEffect(showControls, playingVideo) {
         val window = hostView.context.findActivity()?.window ?: return@LaunchedEffect
         val controller = androidx.core.view.WindowCompat.getInsetsController(window, hostView)
         controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE

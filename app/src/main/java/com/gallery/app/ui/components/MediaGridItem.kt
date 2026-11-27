@@ -99,7 +99,6 @@ fun MediaGridItem(
 
     val theme = LocalAppTheme.current
     val placeholder = if (theme.palette.isLight) LightPlaceholder else DarkPlaceholder
-    val selected = isSelectionMode && isSelected
 
     // Remember where the tile sits so the fullscreen viewer can zoom out of it. Kept in a plain holder
     // (not state) and only resolved to bounds on click, so scrolling costs nothing extra.
@@ -126,14 +125,6 @@ fun MediaGridItem(
                 .fillMaxSize()
                 .clickable(onClick = openAwareClick)
         )
-
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Transparent)
-            )
-        }
 
         if (item.isVideo) VideoBadge(item)
         if (isFavorite) FavoriteBadge()

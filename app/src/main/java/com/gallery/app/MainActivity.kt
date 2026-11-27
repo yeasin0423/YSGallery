@@ -378,9 +378,47 @@ private fun GalleryAppContent(
     val allAlbumsFlat by viewModel.albumsState.collectAsStateWithLifecycle()
     val albumSort by viewModel.albumSort.collectAsStateWithLifecycle()
     val albumStorageFilter by viewModel.albumStorageFilter.collectAsStateWithLifecycle()
+    // Every visible item, unfiltered; the picker uses it to tell which albums hold an accepted kind.
+    val allMedia by viewModel.allMediaState.collectAsStateWithLifecycle()
     val selectionBytes by viewModel.selectionBytes.collectAsStateWithLifecycle()
-    // Re-read whenever the selection changes, so the sheets show what is free right now.
-    val freeByStorage = remember(selectionBytes) { viewModel.freeByStorage() }
+    // Re-read whenever the selection changes, so the sheets show what is free right now. The StatFs
+    // calls run off the main thread; the move sheets only need the map once they are opened.
+    var freeByStorage by remember { mutableStateOf<Map<com.gallery.app.util.StorageKind, Long>>(emptyMap()) }
+    LaunchedEffect(selectionBytes) {
+        if (selectionBytes > 0L) {
+            freeByStorage = withContext(Dispatchers.IO) { viewModel.freeByStorage() }
+        }
+    }
+
+    // An images-only picker must not offer an album that holds only videos (and the other way round).
+    // Album items only carry a count, so derive the allowed bucket ids from the media list; a parent
+    // folder stays visible when a nested album inside it has an item of the requested kind.
+    val pickAlbumIds = remember(pickRequest, allMedia, allAlbumsFlat) {
+        val request = pickRequest ?: return@remember null
+        if (request.images && request.videos) return@remember null
+        val wantImages = request.images
+        val matching = allMedia.asSequence()
+            .filter { if (wantImages) !it.isVideo else it.isVideo }
+            .map { it.bucketId }
+            .filter { it.isNotBlank() }
+            .toHashSet()
+        val normalize = { path: String -> path.trimEnd('/', '\\').lowercase() }
+        val byDirectory = allAlbumsFlat.associateBy { normalize(it.directoryPath) }
+        val byBucket = allAlbumsFlat.associateBy { it.bucketId }
+        val allowed = HashSet<String>(matching.size * 2)
+        matching.forEach { bucketId ->
+            allowed += bucketId
+            var parent = byBucket[bucketId]?.let { normalize(it.parentDirectoryPath) }.orEmpty()
+            var depth = 0
+            while (parent.isNotBlank() && depth++ < 32) {
+                val parentAlbum = byDirectory[parent] ?: break
+                allowed += parentAlbum.bucketId
+                parent = normalize(parentAlbum.parentDirectoryPath)
+            }
+        }
+        allowed
+    }
+
     val currentSubAlbums by viewModel.currentSubAlbums.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val isTrashOpen by viewModel.isTrashOpen.collectAsStateWithLifecycle()
@@ -478,6 +516,8 @@ private fun GalleryAppContent(
                 val hasPerm = hasMediaPermission(context)
                 mediaGranted = hasPerm
                 viewModel.updatePermissionState(hasPerm)
+                // A card may have been inserted or removed while the app was in the background.
+                viewModel.refreshStorageVolumes()
                 // Coming back from the all-files page in Settings updates the optional access state.
                 allFilesAccess = hasAllFilesAccess()
                 // Files other apps wrote past MediaStore (downloads, file managers) are indexed now
@@ -716,6 +756,7 @@ private fun GalleryAppContent(
                                         pickSelectedIds = pickSelectedIds,
                                         pickImages = pickRequest?.images ?: true,
                                         pickVideos = pickRequest?.videos ?: true,
+                                        pickAlbumIds = pickAlbumIds,
                                         onTogglePick = togglePick,
                                         onConfirmPick = confirmPick,
                                         onCancelPick = onCancelPick,

@@ -174,10 +174,18 @@ fun GalleryScreen(
             )
         }
     }
-    val filterSwitchModifier = Modifier.graphicsLayer {
-        val p = filterAnim.value
-        alpha = 0.2f + 0.8f * p
-        translationY = (1f - p) * 18.dp.toPx()
+    // The layer is only needed while the switch animation runs; leaving it on every tile at rest
+    // would keep a graphics layer alive for the whole grid. The value check also covers the frame
+    // between snapTo(0f) and animateTo(1f), when the animation has not started yet.
+    val filterAnimating by remember { derivedStateOf { filterAnim.isRunning || filterAnim.value < 1f } }
+    val filterSwitchModifier = if (filterAnimating) {
+        Modifier.graphicsLayer {
+            val p = filterAnim.value
+            alpha = 0.2f + 0.8f * p
+            translationY = (1f - p) * 18.dp.toPx()
+        }
+    } else {
+        Modifier
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -413,7 +421,7 @@ fun GalleryScreen(
                                     } else if (isSelectionMode) {
                                         onToggleSelection(item.id)
                                     } else {
-                                        onItemClick(item, displayItems.indexOf(item))
+                                        onItemClick(item, displayItems.indexOfFirst { it.id == item.id })
                                     }
                                 },
                                 modifier = Modifier

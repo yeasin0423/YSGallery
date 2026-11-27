@@ -108,6 +108,9 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
     // Raw unfiltered media items
     private val _rawMedia = MutableStateFlow<List<MediaItem>>(emptyList())
 
+    /** Every visible item, unfiltered, for the picker's album-kind filtering. */
+    val allMediaState: StateFlow<List<MediaItem>> = _rawMedia.asStateFlow()
+
     // Main media state
     private val _uiState = MutableStateFlow<GalleryUiState>(GalleryUiState.Loading)
     val uiState: StateFlow<GalleryUiState> = _uiState.asStateFlow()
@@ -299,6 +302,14 @@ class GalleryViewModel(application: Application) : AndroidViewModel(application)
 
     // MicroSD Card detection
     val isSdCardAvailable: Boolean get() = repository.isSdCardAvailable()
+
+    /**
+     * Re-reads the mounted volumes after a resume, in case a card was inserted or removed. The walk
+     * happens on an IO thread; callers keep reading the cached list without touching the main thread.
+     */
+    fun refreshStorageVolumes() {
+        viewModelScope.launch(Dispatchers.IO) { repository.refreshExternalVolumes() }
+    }
 
     // Storage free/total space, queried fresh each time the settings dialog reads them
     fun getInternalStorageSpace() = repository.getInternalStorageSpace()

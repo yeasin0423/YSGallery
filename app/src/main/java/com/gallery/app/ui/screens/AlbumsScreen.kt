@@ -249,6 +249,8 @@ fun AlbumsScreen(
     /** In pick mode, which kinds the caller accepts; the album grid hides the rest. */
     pickImages: Boolean = true,
     pickVideos: Boolean = true,
+    /** Bucket ids of albums holding an accepted item; null when every album qualifies. */
+    pickAlbumIds: Set<String>? = null,
     onTogglePick: (MediaItem) -> Unit = {},
     onConfirmPick: () -> Unit = {},
     onCancelPick: () -> Unit = {},
@@ -302,6 +304,13 @@ fun AlbumsScreen(
     } else {
         albumMedia
     }
+    // An album holding only the kind the caller does not accept would open onto an empty page, so it
+    // is left out of the list entirely while picking.
+    val levelAlbums = if (pickMode && pickAlbumIds != null) {
+        albums.filter { it.bucketId in pickAlbumIds }
+    } else {
+        albums
+    }
 
     // Opening an album (or going back up) moves the page in with One UI's album motion.
     val navProgress = remember { androidx.compose.animation.core.Animatable(1f) }
@@ -321,7 +330,7 @@ fun AlbumsScreen(
     val forcedNavProgress = if (navPending) 0f else null
     val context = LocalContext.current
     val latestMedia = rememberUpdatedState(displayAlbumMedia)
-    val latestSubAlbums = rememberUpdatedState(albums)
+    val latestSubAlbums = rememberUpdatedState(levelAlbums)
     LaunchedEffect(currentAlbum?.bucketId) {
         val key = currentAlbum?.bucketId
         if (key != animatedAlbumKey) {
@@ -336,16 +345,25 @@ fun AlbumsScreen(
                 }
                 // Then the first screenful of thumbnails and the sub-album covers are loaded into the memory
                 // cache, so the page moves in with its images instead of them popping in during the motion.
-                withTimeoutOrNull(400) {
-                    val loader = SingletonImageLoader.get(context)
-                    coroutineScope {
-                        val thumbnails = latestMedia.value.take(columnCount * 10).map { item ->
-                            async { loader.execute(thumbnailRequest(context, item)) }
+                // Weak devices skip the burst entirely and mid-range ones decode fewer tiles, so opening
+                // an album never queues more work than the page animation can afford.
+                val preloadCount = when (graphicsQuality) {
+                    com.gallery.app.PerformanceProfile.LOW -> 0
+                    com.gallery.app.PerformanceProfile.MEDIUM -> columnCount * 5
+                    else -> columnCount * 10
+                }
+                if (preloadCount > 0) {
+                    withTimeoutOrNull(400) {
+                        val loader = SingletonImageLoader.get(context)
+                        coroutineScope {
+                            val thumbnails = latestMedia.value.take(preloadCount).map { item ->
+                                async { loader.execute(thumbnailRequest(context, item)) }
+                            }
+                            val covers = latestSubAlbums.value.take(subColumns * 2).mapNotNull { it.coverUri }.map { uri ->
+                                async { loader.execute(albumCoverRequest(context, uri)) }
+                            }
+                            (thumbnails + covers).awaitAll()
                         }
-                        val covers = latestSubAlbums.value.take(subColumns * 2).mapNotNull { it.coverUri }.map { uri ->
-                            async { loader.execute(albumCoverRequest(context, uri)) }
-                        }
-                        (thumbnails + covers).awaitAll()
                     }
                 }
             }
@@ -386,20 +404,22 @@ fun AlbumsScreen(
     LaunchedEffect(albums) { if (draggedKey == null) arranged = null }
     /** What was typed into the search field, or null while it is closed or still empty. */
     val albumSearchTerm = albumSearchQuery.trim().takeIf { albumSearchOpen && it.isNotBlank() }
+    val allowedAlbumIds = pickAlbumIds.takeIf { pickMode }
     val shownAlbums = if (!isInsideAlbum) {
         if (albumSearchTerm != null) {
             // Every album of the phone, nested ones included - a name is searched for wherever it sits,
             // not only among the albums this level happens to show.
-            remember(albumSearchTerm, allAlbumsFlat) {
+            remember(albumSearchTerm, allAlbumsFlat, allowedAlbumIds) {
                 allAlbumsFlat
                     .filter { it.name.contains(albumSearchTerm, ignoreCase = true) }
+                    .filter { allowedAlbumIds == null || it.bucketId in allowedAlbumIds }
                     .sortedBy { it.name.lowercase() }
             }
         } else {
-            (arranged ?: albums).filter { storageFilter == null || it.storage == storageFilter }
+            (arranged ?: levelAlbums).filter { storageFilter == null || it.storage == storageFilter }
         }
     } else {
-        albums
+        levelAlbums
     }
     val selectedAlbums = shownAlbums.filter { it.bucketId in selectedAlbumIds }
     /** Leaves album selection, forgetting what was ticked. */
@@ -823,16 +843,16 @@ fun AlbumsScreen(
                             }
                         }
 
-                        if (albums.isNotEmpty()) {
+                        if (levelAlbums.isNotEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }, key = "sub_albums_title") {
-                                AlbumsSectionTitle(strings.subAlbums, albums.size, Modifier.padding(horizontal = sectionInset))
+                                AlbumsSectionTitle(strings.subAlbums, levelAlbums.size, Modifier.padding(horizontal = sectionInset))
                             }
                             item(span = { GridItemSpan(maxLineSpan) }, key = "sub_albums") {
                                 Column(
                                     modifier = Modifier.padding(horizontal = sectionInset, vertical = 4.dp),
                                     verticalArrangement = Arrangement.spacedBy(14.dp)
                                 ) {
-                                    albums.chunked(subColumns).forEach { rowAlbums ->
+                                    levelAlbums.chunked(subColumns).forEach { rowAlbums ->
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.spacedBy(if (subColumns >= 4) 8.dp else 10.dp)
@@ -856,7 +876,7 @@ fun AlbumsScreen(
                         }
 
                         if (displayAlbumMedia.isNotEmpty()) {
-                            if (albums.isNotEmpty()) {
+                            if (levelAlbums.isNotEmpty()) {
                                 item(span = { GridItemSpan(maxLineSpan) }, key = "album_media_title") {
                                     AlbumsSectionTitle(strings.media, displayAlbumMedia.size, Modifier.padding(horizontal = sectionInset, vertical = 6.dp))
                                 }
@@ -879,7 +899,7 @@ fun AlbumsScreen(
                                             isTrailingClickFromLongPress -> Unit
                                             pickSelectionMode -> onTogglePick(item)
                                             isSelectionMode -> onToggleSelection(item.id)
-                                            else -> onMediaItemClick(item, displayAlbumMedia.indexOf(item))
+                                            else -> onMediaItemClick(item, displayAlbumMedia.indexOfFirst { it.id == item.id })
                                         }
                                     },
                                     modifier = Modifier
@@ -887,7 +907,7 @@ fun AlbumsScreen(
                                         .clipToBounds()
                                 )
                             }
-                        } else if (albums.isEmpty()) {
+                        } else if (levelAlbums.isEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }, key = "album_empty") {
                                 Column(
                                     modifier = Modifier
@@ -896,12 +916,14 @@ fun AlbumsScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(strings.albumEmpty, color = palette.textMuted, fontSize = 16.sp)
-                                    Spacer(modifier = Modifier.height(18.dp))
-                                    ThemedButton(
-                                        text = strings.createSubAlbum,
-                                        icon = Icons.Rounded.CreateNewFolder,
-                                        onClick = { showCreateSubDialog = true }
-                                    )
+                                    if (!pickMode) {
+                                        Spacer(modifier = Modifier.height(18.dp))
+                                        ThemedButton(
+                                            text = strings.createSubAlbum,
+                                            icon = Icons.Rounded.CreateNewFolder,
+                                            onClick = { showCreateSubDialog = true }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1028,7 +1050,11 @@ fun AlbumsScreen(
         // One UI: the other albums in a single column at the left edge, revealed by swiping right.
         if (isInsideAlbum && drawerProgress > 0f) {
             AlbumDrawer(
-                albums = rootAlbums,
+                albums = if (pickMode && pickAlbumIds != null) {
+                    rootAlbums.filter { it.bucketId in pickAlbumIds }
+                } else {
+                    rootAlbums
+                },
                 currentRootId = breadcrumbs.firstOrNull()?.bucketId,
                 widthPx = drawerWidthPx,
                 progress = { drawerProgress },

@@ -416,7 +416,7 @@ class MediaRepository(private val context: Context) {
     private fun mediaContainerDirs(): Set<String> {
         val roots = ArrayList<File>()
         runCatching { Environment.getExternalStorageDirectory() }.getOrNull()?.let { roots.add(it) }
-        runCatching { com.gallery.app.util.ExternalStorage.volumes(context) }
+        runCatching { externalVolumes() }
             .getOrDefault(emptyList())
             .forEach { roots.add(it.root) }
         val folders = listOf(
@@ -1108,7 +1108,9 @@ class MediaRepository(private val context: Context) {
      * Checks if SD card storage is available.
      */
     fun isSdCardAvailable(): Boolean {
-        return getSdCardPicturesDirectory() != null
+        // Only look the volume up; creating its Pictures folder here made every composition that read
+        // this value touch the filesystem on the main thread.
+        return getSdCardRootDirectory() != null
     }
 
     /**
@@ -1116,14 +1118,33 @@ class MediaRepository(private val context: Context) {
      * one, otherwise a USB drive. Only a writable (mounted read-write) volume counts.
      */
     fun externalTarget(): com.gallery.app.util.ExternalVolume? =
-        com.gallery.app.util.ExternalStorage.volumes(context)
+        externalVolumes()
             .filter { !it.readOnly }
             .sortedBy { if (it.kind == com.gallery.app.util.StorageKind.SD_CARD) 0 else 1 }
             .firstOrNull()
 
+    /**
+     * Mounted removable volumes, cached: walking StorageManager and its reflective volume-id lookup is
+     * far too slow to repeat from composition. [refreshExternalVolumes] drops the cache on resume.
+     */
+    @Volatile
+    private var cachedExternalVolumes: List<com.gallery.app.util.ExternalVolume>? = null
+
     /** Every mounted removable volume, SD cards and USB storage alike (for the storage pages). */
-    fun externalVolumes(): List<com.gallery.app.util.ExternalVolume> =
-        com.gallery.app.util.ExternalStorage.volumes(context)
+    fun externalVolumes(): List<com.gallery.app.util.ExternalVolume> {
+        cachedExternalVolumes?.let { return it }
+        return com.gallery.app.util.ExternalStorage.volumes(context).also { cachedExternalVolumes = it }
+    }
+
+    /**
+     * Re-reads the mounted volumes; called when the activity resumes. Call it off the main thread:
+     * the storage walk is the expensive part and the cache is published only when it finishes.
+     */
+    fun refreshExternalVolumes() {
+        // Keep the previous list if the walk fails, so a transient error cannot hide a mounted card.
+        runCatching { com.gallery.app.util.ExternalStorage.volumes(context) }
+            .onSuccess { cachedExternalVolumes = it }
+    }
 
     /**
      * The MediaStore volume name of [externalTarget], for [MediaStore.Images.Media.getContentUri] /
