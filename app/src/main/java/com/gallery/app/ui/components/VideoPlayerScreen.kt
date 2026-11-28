@@ -184,7 +184,9 @@ fun VideoPlayerScreen(
     var orientation by remember { mutableStateOf(PlayerOrientation.AUTO) }
 
     // The player canvas is always black, so its system bar icons must stay white even when the gallery
-    // is in the light theme. Put the theme's own choice back when the player closes.
+    // is in the light theme. Put the theme's own choice back when the player closes. The window also
+    // draws into the camera-cutout area while it is open: in landscape Android otherwise letterboxes
+    // the window away from a punch-hole, leaving a visible strip that makes playback not truly fullscreen.
     DisposableEffect(activity) {
         val window = activity?.window
         if (window == null) {
@@ -193,11 +195,19 @@ fun VideoPlayerScreen(
             val controller = WindowCompat.getInsetsController(window, window.decorView)
             val previousStatus = controller.isAppearanceLightStatusBars
             val previousNavigation = controller.isAppearanceLightNavigationBars
+            val previousCutout = window.attributes.layoutInDisplayCutoutMode
             controller.isAppearanceLightStatusBars = false
             controller.isAppearanceLightNavigationBars = false
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
             onDispose {
                 controller.isAppearanceLightStatusBars = previousStatus
                 controller.isAppearanceLightNavigationBars = previousNavigation
+                window.attributes = window.attributes.apply {
+                    layoutInDisplayCutoutMode = previousCutout
+                }
             }
         }
     }

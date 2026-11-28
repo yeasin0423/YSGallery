@@ -190,6 +190,12 @@ class MainActivity : ComponentActivity() {
                 pickRequest.value = null
                 handleViewIntent(intent)
             }
+            // The system screenshot preview's "Edit" button, or any other app that hands a photo
+            // over for editing: show it in the viewer with the editor already open.
+            Intent.ACTION_EDIT -> {
+                pickRequest.value = null
+                handleViewIntent(intent, edit = true)
+            }
             Intent.ACTION_PICK, Intent.ACTION_GET_CONTENT -> handlePickIntent(intent)
         }
     }
@@ -269,15 +275,16 @@ class MainActivity : ComponentActivity() {
         finish()
     }
 
-    private fun handleViewIntent(intent: Intent?) {
-        if (intent?.action != Intent.ACTION_VIEW) return
+    private fun handleViewIntent(intent: Intent?, edit: Boolean = false) {
+        val action = intent?.action
+        if (action != Intent.ACTION_VIEW && action != Intent.ACTION_EDIT) return
         val uri = intent.data ?: return
         // A camera may attach every shot of its session as ClipData, so they can be swiped through. The
         // opened file is always part of the list, even if the sender left it out.
         val clip = intent.clipData
         val attached = if (clip != null) (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri } else emptyList()
         val uris = (if (uri in attached) attached else listOf(uri) + attached).distinct()
-        val request = ExternalViewRequest(uri, uris)
+        val request = ExternalViewRequest(uri, uris, edit = edit)
         viewRequest.value = request
         val typeHint = intent.type
         lifecycleScope.launch {

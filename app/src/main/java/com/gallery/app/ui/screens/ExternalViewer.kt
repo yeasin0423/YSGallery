@@ -31,7 +31,12 @@ import com.gallery.app.ui.components.VideoPlayerScreen
  * over every shot of its session (as the intent's ClipData) so they can be swiped through, starting
  * at [uri]. [items] is filled in once the files have been looked at.
  */
-class ExternalViewRequest(val uri: Uri, val uris: List<Uri> = listOf(uri)) {
+class ExternalViewRequest(
+    val uri: Uri,
+    val uris: List<Uri> = listOf(uri),
+    /** Another app asked to edit the file, not just to show it: the editor opens right away. */
+    val edit: Boolean = false
+) {
     val items = mutableStateOf<List<MediaItem>>(emptyList())
     val initialIndex = mutableStateOf(0)
 
@@ -115,7 +120,8 @@ fun ExternalMediaViewer(
                 isFavorite = { it in favoriteIds },
                 onToggleFavorite = onToggleFavorite,
                 viewOnly = !inLibrary,
-                allowRename = false
+                allowRename = false,
+                startInEditor = request.edit
             )
         }
     }

@@ -20,8 +20,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -40,7 +38,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
@@ -156,6 +153,8 @@ fun MediaDetailScreen(
     deleteDirectly: Boolean = false,
     /** Another app is picking: the top bar shows a cross (back) and a tick (confirm). */
     pickMode: Boolean = false,
+    /** Another app asked to edit this file: the editor opens over the viewer on the first frame. */
+    startInEditor: Boolean = false,
     onPickConfirm: (MediaItem) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -219,7 +218,12 @@ fun MediaDetailScreen(
     // The ⋯ menu in the top bar.
     var showMoreMenu by remember { mutableStateOf(false) }
     var moreMenuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    var editingItem by remember { mutableStateOf<MediaItem?>(null) }
+    var editingItem by remember {
+        // An edit request from another app opens the editor over the viewer straight away.
+        mutableStateOf(
+            if (startInEditor) mediaList.getOrNull(initialIndex.coerceIn(0, mediaList.lastIndex)) else null
+        )
+    }
     var viewerSize by remember { mutableStateOf(IntSize.Zero) }
 
     val currentItem = mediaList.getOrNull(pagerState.currentPage) ?: mediaList[0]
@@ -550,12 +554,6 @@ fun MediaDetailScreen(
                     DetailViewOnlyBar(actions)
                 } else if (trashMode) {
                     DetailTrashBar(actions)
-                } else if (mediaList.size > 1) {
-                    // The strip of neighbouring photos above the toolbar.
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        OneUiFilmstrip(mediaList, pagerState)
-                        DetailBottomBar(actions, editEnabled = currentItem.isImage)
-                    }
                 } else {
                     DetailBottomBar(actions, editEnabled = currentItem.isImage)
                 }
@@ -566,7 +564,7 @@ fun MediaDetailScreen(
         if (panelComposed && panelHeightPx > 0f && !pickMode) {
             InfoPanel(
                 item = currentItem,
-                onEdit = if (viewOnly) null else actions.onEdit,
+                onEdit = if (viewOnly && !startInEditor) null else actions.onEdit,
                 editEnabled = currentItem.isImage,
                 heightDp = with(density) { panelHeightPx.toDp() },
                 progress = { infoProgress },
@@ -731,90 +729,6 @@ private tailrec fun android.content.Context.findActivity(): android.app.Activity
     else -> null
 }
 
-/**
- * One UI's filmstrip: small thumbnails of the neighbouring photos with the current one larger and outlined.
- * Tapping a thumbnail opens it; sliding the strip flips through the photos as it passes them.
- */
-@Composable
-private fun OneUiFilmstrip(mediaList: List<MediaItem>, pagerState: androidx.compose.foundation.pager.PagerState) {
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    val scope = rememberCoroutineScope()
-    val palette = LocalAppTheme.current.palette
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = pagerState.currentPage)
-    val dragged by listState.interactionSource.collectIsDraggedAsState()
-    var userScrolling by remember { mutableStateOf(false) }
-    if (dragged) userScrolling = true
-    val itemWidth = 38.dp
-    val gap = 3.dp
-    val stepPx = with(density) { (itemWidth + gap).toPx() }
-
-    // The strip follows the pager, unless the user is sliding the strip itself.
-    androidx.compose.runtime.LaunchedEffect(pagerState.currentPage) {
-        if (!userScrolling) listState.animateScrollToItem(pagerState.currentPage)
-    }
-    // While the user slides the strip, the photo under its centre opens.
-    androidx.compose.runtime.LaunchedEffect(listState) {
-        androidx.compose.runtime.snapshotFlow {
-            listState.firstVisibleItemIndex + if (listState.firstVisibleItemScrollOffset > stepPx / 2f) 1 else 0
-        }.collect { centre ->
-            if (userScrolling && centre in mediaList.indices && centre != pagerState.currentPage) {
-                pagerState.scrollToPage(centre)
-            }
-        }
-    }
-    androidx.compose.runtime.LaunchedEffect(listState) {
-        androidx.compose.runtime.snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
-            if (!scrolling) userScrolling = false
-        }
-    }
-
-    androidx.compose.foundation.layout.BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(62.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        val side = (maxWidth - itemWidth) / 2
-        androidx.compose.foundation.lazy.LazyRow(
-            state = listState,
-            flingBehavior = androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior(listState),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = side),
-            horizontalArrangement = Arrangement.spacedBy(gap),
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(mediaList.size, key = { mediaList[it].id }) { index ->
-                val item = mediaList[index]
-                val current = index == pagerState.currentPage
-                Box(
-                    modifier = Modifier
-                        .width(itemWidth)
-                        .height(if (current) 54.dp else 44.dp)
-                        .graphicsLayer { scaleX = if (current) 1.2f else 1f }
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(palette.surfaceVariant)
-                        .then(if (current) Modifier.border(2.dp, palette.onBackground, RoundedCornerShape(6.dp)) else Modifier)
-                        .clickable {
-                            userScrolling = false
-                            scope.launch {
-                                pagerState.scrollToPage(index)
-                                listState.animateScrollToItem(index)
-                            }
-                        }
-                ) {
-                    AsyncImage(
-                        model = remember(item.id, context) { com.gallery.app.ui.components.thumbnailRequest(context, item) },
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-        }
-    }
-}
-
 /** Back closes the details panel while it is mostly open. Reads the state in its own small scope. */
 @Composable
 private fun InfoBackHandler(isOpen: () -> Boolean, onClose: () -> Unit) {
@@ -930,7 +844,9 @@ private fun DetailTopBar(actions: DetailActions) {
         modifier = Modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            // Kept tight so the circles sit fully in the letterbox above a tall video instead of
+            // overlapping its top edge.
+            .padding(horizontal = 14.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         OneUiChromeCircle(Icons.AutoMirrored.Rounded.ArrowBackIos, strings.back, Modifier, actions.onBack)

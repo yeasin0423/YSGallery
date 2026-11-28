@@ -53,6 +53,19 @@
             </intent-filter>
 
             <!--
+              Editing a photo handed over by another app, e.g. the "Edit" button on the system
+              screenshot preview. Without this filter the gallery never appears in that editor list.
+              Only images are offered: the editor does not edit videos.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.EDIT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+
+            <!--
               Picking a photo or video for another app, e.g. a profile picture, wallpaper or the
               "custom image" of the Quick Settings header. Android lists only apps that answer these
               actions, which is why a gallery without them does not appear in those pickers.
